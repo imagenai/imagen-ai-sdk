@@ -42,12 +42,12 @@ asyncio.run(main())
 
 ## 🎯 Why Use This SDK?
 
-| **Before** | **After**                                  |
-|------------|--------------------------------------------|
-| Edit 500 wedding photos manually | Upload → Wait couple of minutes → Download |
-| Hours of repetitive work | 5 lines of Python code                     |
-| Inconsistent editing style | Professional AI consistency                |
-| Manual file management | Automatic downloads                        |
+| **Before** | **After** |
+|------------|-----------|
+| Edit 500 wedding photos manually | Upload → Wait 30 minutes → Download |
+| Hours of repetitive work | 5 lines of Python code |
+| Inconsistent editing style | Professional AI consistency |
+| Manual file management | Automatic downloads |
 
 > **💡 Pro Tip**: For best results, use **DNG (Digital Negative)** files. The AI works optimally with RAW data and produces higher quality edits than JPEG files.
 
@@ -204,6 +204,34 @@ asyncio.run(test_connection())
 
 ---
 
+## 📋 Important Notes
+
+### **Project Names**
+- **Project names must be unique** - You cannot create multiple projects with the same name
+- **If a project name already exists**, you'll get an error and need to choose a different name
+- **Project naming is optional** - If you don't provide a name, a random UUID will be automatically assigned
+- **Recommended approach**: Use descriptive, unique names like "ClientName-SessionType-Date"
+
+```python
+# Good: Unique, descriptive names
+await client.create_project("Sarah_Mike_Wedding_2024_01_15")
+await client.create_project("Johnson_Family_Portraits_Jan2024")
+
+# Good: No name provided (auto UUID)
+project_uuid = await client.create_project()  # Gets random UUID
+
+# Bad: Generic names that might already exist
+await client.create_project("Wedding Photos")  # Might fail if name exists
+```
+
+### **Best Practices**
+- **Use timestamps** in project names to ensure uniqueness
+- **Include client/session info** for easy identification
+- **Consider auto-generated names** for quick testing
+- **Save project UUIDs** if you need to reference projects later
+
+---
+
 ## 📚 Photography Types & Options
 
 ### **Photography Types**
@@ -261,6 +289,16 @@ result = await quick_edit(
 1. Double-check your API key is correct
 2. Make sure you've contacted support to activate your key
 3. Verify environment variable is set: `echo $IMAGEN_API_KEY`
+
+#### **Project Name Already Exists**
+```
+❌ Error: Project with name 'Wedding Photos' already exists
+```
+**Solutions:**
+1. **Use a unique project name** with timestamp: "Wedding_Photos_2024_01_15"
+2. **Include client information**: "Sarah_Mike_Wedding_Jan2024"
+3. **Let the system auto-generate** by not providing a name: `create_project()`
+4. **Add session details**: "Wedding_Ceremony_Morning_Session"
 
 #### **No Files Found**
 ```
