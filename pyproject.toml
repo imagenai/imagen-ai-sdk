@@ -49,10 +49,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/imagen-ai-sdk"
-Documentation = "https://imagen-ai-sdk.readthedocs.io/"
-Repository = "https://github.com/yourusername/imagen-ai-sdk"
-"Bug Reports" = "https://github.com/yourusername/imagen-ai-sdk/issues"
+Homepage = "https://github.com/imagenai/imagen-ai-sdk"
+Documentation = "https://support.imagen-ai.com/hc/en-us/articles/19137253415965-Automate-your-post-production-workflow-with-Imagen-API"
+Repository = "https://github.com/imagenai/imagen-ai-sdk"
+"Bug Reports" = "https://github.com/imagenai/imagen-ai-sdk/issues"
 
 [tool.setuptools.packages.find]
 include = ["imagen_sdk*"]
