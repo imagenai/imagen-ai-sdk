@@ -715,10 +715,7 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
 
     async with ImagenClient(api_key, base_url, logger=logger, logger_level=logger_level) as client:
         # --- Profile and file type validation ---
-        profiles = await client.get_profiles()
-        profile = next((p for p in profiles if p.profile_key == profile_key), None)
-        if not profile:
-            raise UploadError(f"Profile with key {profile_key} not found.")
+        profile = await get_profile(api_key, profile_key, base_url)
         _logger.info(f"Using profile: {profile.profile_name} (type: {profile.image_type})")
 
         # Use the helper for file type validation
@@ -771,6 +768,18 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
 
         _logger.info(f"Quick edit workflow completed successfully for project {project_uuid}")
         return result
+
+
+async def get_profile(api_key: str, profile_key: int, base_url: str = "https://api-beta.imagen-ai.com/v1") -> Profile:
+    """
+    Fetch all profiles using the API key and return the profile matching the given profile_key.
+    Raises UploadError if not found.
+    """
+    profiles = await get_profiles(api_key, base_url)
+    for p in profiles:
+        if p.profile_key == profile_key:
+            return p
+    raise UploadError(f"Profile with key {profile_key} not found.")
 
 
 if __name__ == "__main__":

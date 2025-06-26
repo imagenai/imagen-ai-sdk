@@ -58,7 +58,7 @@ One-Line Usage:
     print(f"Exported files: {result.exported_files}")
 """
 
-from .imagen_sdk import ImagenClient, quick_edit, get_profiles, check_files_match_profile_type
+from .imagen_sdk import ImagenClient, quick_edit, get_profiles, check_files_match_profile_type, get_profile
 from .models import (
     Profile, ProfileApiResponse, ProfileApiData, ProjectCreationResponseData, ProjectCreationResponse,
     FileUploadInfo, PresignedUrl, PresignedUrlList, PresignedUrlResponse, EditOptions, StatusDetails,
@@ -104,6 +104,7 @@ __all__ = [
     'CropAspectRatio',
     'quick_edit',
     'get_profiles',
+    'get_profile',
     'check_files_match_profile_type',
     '__version__',
 ]
