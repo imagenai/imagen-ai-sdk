@@ -8,191 +8,24 @@ import asyncio
 import hashlib
 import logging
 import time
-from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union, Callable
 from urllib.parse import urlparse, unquote
 
 import aiofiles
 import httpx
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import ValidationError
+
+from .enums import PhotographyType
+from .exceptions import ImagenError, AuthenticationError, ProjectError, UploadError, DownloadError
+from .models import (
+    Profile, ProfileApiData, ProjectCreationResponse,
+    FileUploadInfo, PresignedUrlResponse, EditOptions, StatusDetails,
+    StatusResponse, DownloadLinksResponse, UploadResult, UploadSummary, QuickEditResult
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# ENUMS
-# =============================================================================
-
-class PhotographyType(Enum):
-    """Photography types for AI optimization (from API spec)."""
-    NO_TYPE = "NO_TYPE"
-    OTHER = "OTHER"
-    PORTRAITS = "PORTRAITS"
-    WEDDING = "WEDDING"
-    REAL_ESTATE = "REAL_ESTATE"
-    LANDSCAPE_NATURE = "LANDSCAPE_NATURE"
-    EVENTS = "EVENTS"
-    FAMILY_NEWBORN = "FAMILY_NEWBORN"
-    BOUDOIR = "BOUDOIR"
-    SPORTS = "SPORTS"
-
-
-class CropAspectRatio(Enum):
-    """Crop aspect ratios (from API spec)."""
-    RATIO_2X3 = "2X3"
-    RATIO_4X5 = "4X5"
-    RATIO_5X7 = "5X7"
-
-
-# =============================================================================
-# PYDANTIC MODELS
-# =============================================================================
-
-class Profile(BaseModel):
-    """Represents an editing profile."""
-    image_type: str = Field(..., description="Type of images this profile handles")
-    profile_key: int = Field(..., description="Unique identifier for the profile")
-    profile_name: str = Field(..., description="Human-readable name of the profile")
-    profile_type: str = Field(..., description="Type/tier of the profile")
-
-
-class ProfileApiResponse(BaseModel):
-    """API response wrapper for profiles list."""
-    profiles: List[Profile]
-
-
-class ProfileApiData(BaseModel):
-    """Top-level API response for profiles endpoint."""
-    data: ProfileApiResponse
-
-
-class ProjectCreationResponseData(BaseModel):
-    """Project creation response data."""
-    project_uuid: str = Field(..., description="Unique identifier for the created project")
-
-
-class ProjectCreationResponse(BaseModel):
-    """API response for project creation."""
-    data: ProjectCreationResponseData
-
-
-class FileUploadInfo(BaseModel):
-    """Information about a file to be uploaded."""
-    file_name: str = Field(..., description="Name of the file")
-    md5: Optional[str] = Field(None, description="MD5 hash of the file content")
-
-
-class PresignedUrl(BaseModel):
-    """Presigned URL for uploading a file."""
-    file_name: str = Field(..., description="Name of the file")
-    upload_link: str = Field(..., description="Presigned URL for upload")
-
-
-class PresignedUrlList(BaseModel):
-    """List of presigned URLs."""
-    files_list: List[PresignedUrl]
-
-
-class PresignedUrlResponse(BaseModel):
-    """API response containing presigned URLs."""
-    data: PresignedUrlList
-
-
-class EditOptions(BaseModel):
-    """Options for editing operations."""
-    crop: Optional[bool] = Field(None, description="Whether to apply cropping")
-    straighten: Optional[bool] = Field(None, description="Whether to straighten the image")
-    hdr_merge: Optional[bool] = Field(None, description="Whether to apply HDR merge")
-    portrait_crop: Optional[bool] = Field(None, description="Whether to apply portrait cropping")
-    smooth_skin: Optional[bool] = Field(None, description="Whether to apply skin smoothing")
-
-    def to_api_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary excluding unset values."""
-        return self.model_dump(exclude_none=True)
-
-
-class StatusDetails(BaseModel):
-    """Represents the core details of a status check."""
-    status: str = Field(..., description="Current status of the operation")
-    progress: Optional[float] = Field(None, description="Progress percentage (0-100)")
-    details: Optional[str] = Field(None, description="Additional status details")
-
-
-class StatusResponse(BaseModel):
-    """Represents the top-level API response for a status check."""
-    data: StatusDetails
-
-
-class DownloadLink(BaseModel):
-    """Represents a download link for a single file."""
-    file_name: str = Field(..., description="Name of the file")
-    download_link: str = Field(..., description="URL to download the file")
-
-
-class DownloadLinksList(BaseModel):
-    """Represents the list of download links inside the 'data' object."""
-    files_list: List[DownloadLink]
-
-
-class DownloadLinksResponse(BaseModel):
-    """Represents the top-level API response for download links."""
-    data: DownloadLinksList
-
-
-class UploadResult(BaseModel):
-    """Result of uploading a single file."""
-    file: str = Field(..., description="Path of the uploaded file")
-    success: bool = Field(..., description="Whether the upload was successful")
-    error: Optional[str] = Field(None, description="Error message if upload failed")
-
-
-class UploadSummary(BaseModel):
-    """Summary of upload operation results."""
-    total: int = Field(..., description="Total number of files attempted")
-    successful: int = Field(..., description="Number of successfully uploaded files")
-    failed: int = Field(..., description="Number of failed uploads")
-    results: List[UploadResult] = Field(..., description="Detailed results for each file")
-
-
-class QuickEditResult(BaseModel):
-    """Result of a complete quick edit workflow."""
-    project_uuid: str = Field(..., description="UUID of the created project")
-    upload_summary: UploadSummary = Field(..., description="Summary of upload results")
-    download_links: List[str] = Field(..., description="URLs to download edited images")
-    export_links: Optional[List[str]] = Field(None, description="URLs to download exported images")
-    downloaded_files: Optional[List[str]] = Field(None, description="Local paths of downloaded edited files")
-    exported_files: Optional[List[str]] = Field(None, description="Local paths of downloaded exported files")
-
-
-# =============================================================================
-# EXCEPTIONS
-# =============================================================================
-
-class ImagenError(Exception):
-    """Base exception for Imagen SDK errors."""
-    pass
-
-
-class AuthenticationError(ImagenError):
-    """Raised when authentication fails."""
-    pass
-
-
-class ProjectError(ImagenError):
-    """Raised when project operations fail."""
-    pass
-
-
-class UploadError(ImagenError):
-    """Raised when upload operations fail."""
-    pass
-
-
-class DownloadError(ImagenError):
-    """Raised when download operations fail."""
-    pass
-
 
 # =============================================================================
 # IMAGEN CLIENT
@@ -814,10 +647,7 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
             export_links = await client.get_export_links(project_uuid)
 
         if download:
-            # Download edited files
             downloaded_files = await client.download_files(download_links, download_dir)
-
-            # Download exported files if they exist
             if export_links:
                 export_download_dir = Path(download_dir) / "exported"
                 exported_files = await client.download_files(export_links, export_download_dir)
