@@ -16,16 +16,22 @@ import aiofiles
 import httpx
 from pydantic import ValidationError
 
+from .enums import PhotographyType
 from .exceptions import ImagenError, AuthenticationError, ProjectError, UploadError, DownloadError
-from .enums import PhotographyType, CropAspectRatio
 from .models import (
-    Profile, ProfileApiResponse, ProfileApiData, ProjectCreationResponseData, ProjectCreationResponse,
-    FileUploadInfo, PresignedUrl, PresignedUrlList, PresignedUrlResponse, EditOptions, StatusDetails,
-    StatusResponse, DownloadLink, DownloadLinksList, DownloadLinksResponse, UploadResult, UploadSummary, QuickEditResult
+    Profile, ProfileApiData, ProjectCreationResponse,
+    FileUploadInfo, PresignedUrlResponse, EditOptions, StatusDetails,
+    StatusResponse, DownloadLinksResponse, UploadResult, UploadSummary, QuickEditResult
 )
 
 # Default logger for the SDK
 _default_logger = logging.getLogger("imagen_sdk.ImagenClient")
+
+RAW_EXTENSIONS = {".dng",".nef", ".cr2", ".arw", ".nrw", ".crw", ".srf", ".sr2", ".orf", ".raw", ".rw2", ".raf", ".ptx",
+                  ".pef", ".rwl", ".srw", ".cr3", ".3fr", ".fff"}
+JPG_EXTENSIONS = {".jpg", ".jpeg"}
+SUPPORTED_FILE_FORMATS = RAW_EXTENSIONS | JPG_EXTENSIONS
+
 
 # =============================================================================
 # IMAGEN CLIENT
@@ -47,7 +53,8 @@ class ImagenClient:
         if level is not None:
             cls._logger.setLevel(level)
 
-    def __init__(self, api_key: str, base_url: str = "https://api-beta.imagen-ai.com/v1", logger: Optional[logging.Logger] = None, logger_level: Optional[int] = None):
+    def __init__(self, api_key: str, base_url: str = "https://api-beta.imagen-ai.com/v1",
+                 logger: Optional[logging.Logger] = None, logger_level: Optional[int] = None):
         """
         Initialize the Imagen AI client.
 
@@ -186,8 +193,8 @@ class ImagenClient:
             raise ProjectError(f"Could not parse project creation response: {e}")
 
     async def upload_images(self, project_uuid: str, image_paths: List[Union[str, Path]],
-                          max_concurrent: int = 5, calculate_md5: bool = False,
-                          progress_callback: Optional[Callable[[int, int, str], None]] = None) -> UploadSummary:
+                            max_concurrent: int = 5, calculate_md5: bool = False,
+                            progress_callback: Optional[Callable[[int, int, str], None]] = None) -> UploadSummary:
         """
         Upload images to a project.
 
@@ -375,7 +382,8 @@ class ImagenClient:
             raise ProjectError(f"Could not parse export links response: {e}")
 
     async def download_files(self, download_links: List[str], output_dir: Union[str, Path] = "downloads",
-                             max_concurrent: int = 5, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> List[str]:
+                             max_concurrent: int = 5,
+                             progress_callback: Optional[Callable[[int, int, str], None]] = None) -> List[str]:
         """
         Download files from the provided download links.
 
@@ -598,6 +606,10 @@ class ImagenClient:
             await asyncio.sleep(check_interval)
             check_interval = min(check_interval * 1.2, max_interval)
 
+    @property
+    def logger(self):
+        return self._logger
+
 
 # =============================================================================
 # CONVENIENCE FUNCTIONS
@@ -619,6 +631,49 @@ async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai
     """
     async with ImagenClient(api_key, base_url) as client:
         return await client.get_profiles()
+
+
+def check_files_match_profile_type(image_paths: List[Union[str, Path]], profile: Profile, logger: logging.Logger):
+    """
+    Check that all files match the profile's image_type (RAW or JPG).
+    Raise UploadError if there is a mix or mismatch.
+    """
+    if profile.image_type.upper() == "RAW":
+        allowed_exts = RAW_EXTENSIONS
+        type_label = "RAW"
+    elif profile.image_type.upper() == "JPG":
+        allowed_exts = JPG_EXTENSIONS
+        type_label = "JPG"
+    else:
+        raise UploadError(f"Profile type '{profile.image_type}' is not supported for file validation.")
+
+    raw_files = []
+    jpg_files = []
+    invalid_files = []
+    for path in image_paths:
+        ext = Path(path).suffix.lower()
+        if ext in RAW_EXTENSIONS:
+            raw_files.append(str(path))
+        elif ext in JPG_EXTENSIONS:
+            jpg_files.append(str(path))
+        else:
+            invalid_files.append(str(path))
+
+    # Check for mix or mismatch
+    if type_label == "RAW":
+        if jpg_files:
+            logger.error(f"RAW profile cannot be used with JPG files: {jpg_files}")
+            raise UploadError(f"RAW profile cannot be used with JPG files: {jpg_files}")
+        if invalid_files:
+            logger.error(f"RAW profile cannot be used with unsupported files: {invalid_files}")
+            raise UploadError(f"RAW profile cannot be used with unsupported files: {invalid_files}")
+    elif type_label == "JPG":
+        if raw_files:
+            logger.error(f"JPG profile cannot be used with RAW files: {raw_files}")
+            raise UploadError(f"JPG profile cannot be used with RAW files: {raw_files}")
+        if invalid_files:
+            logger.error(f"JPG profile cannot be used with unsupported files: {invalid_files}")
+            raise UploadError(f"JPG profile cannot be used with unsupported files: {invalid_files}")
 
 
 async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str, Path]],
@@ -657,7 +712,18 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
         _logger.setLevel(logger_level)
     _logger.info(f"Starting quick_edit workflow with {len(image_paths)} images")
 
+    # --- Profile and file type validation ---
     async with ImagenClient(api_key, base_url, logger=logger, logger_level=logger_level) as client:
+        profiles = await client.get_profiles()
+        profile = next((p for p in profiles if p.profile_key == profile_key), None)
+        if not profile:
+            raise UploadError(f"Profile with key {profile_key} not found.")
+        _logger.info(f"Using profile: {profile.profile_name} (type: {profile.image_type})")
+
+        # Use the helper for file type validation
+        check_files_match_profile_type(image_paths, profile, _logger)
+
+        # --- Continue with workflow ---
         project_uuid = await client.create_project(project_name)
         upload_summary = await client.upload_images(project_uuid, image_paths)
 
@@ -697,4 +763,4 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
 if __name__ == "__main__":
     # This file is intended to be used as a library.
     # See the 'examples.py' file for usage demonstrations.
-    ImagenClient._logger.info("Imagen AI SDK loaded. See examples.py for usage.")
+    ImagenClient.logger.info("Imagen AI SDK loaded. See examples.py for usage.")
