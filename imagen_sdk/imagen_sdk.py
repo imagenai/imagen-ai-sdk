@@ -705,6 +705,7 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
 
     Raises:
         UploadError: If no files were uploaded successfully
+        ProjectError: If project creation, editing, or export fails
         Various other errors from individual operations
     """
     _logger = logger if logger is not None else ImagenClient._logger
@@ -712,8 +713,8 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
         _logger.setLevel(logger_level)
     _logger.info(f"Starting quick_edit workflow with {len(image_paths)} images")
 
-    # --- Profile and file type validation ---
     async with ImagenClient(api_key, base_url, logger=logger, logger_level=logger_level) as client:
+        # --- Profile and file type validation ---
         profiles = await client.get_profiles()
         profile = next((p for p in profiles if p.profile_key == profile_key), None)
         if not profile:
@@ -737,15 +738,27 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
         downloaded_files = None
         exported_files = None
 
+        # Handle export with proper error propagation
         if export:
-            await client.export_project(project_uuid)
-            export_links = await client.get_export_links(project_uuid)
+            try:
+                await client.export_project(project_uuid)
+                export_links = await client.get_export_links(project_uuid)
+            except Exception as e:
+                # Re-raise any export-related errors (ProjectError, etc.)
+                _logger.error(f"Export failed: {e}")
+                raise
 
+        # Handle downloads with proper error propagation
         if download:
-            downloaded_files = await client.download_files(download_links, download_dir)
-            if export_links:
-                export_download_dir = Path(download_dir) / "exported"
-                exported_files = await client.download_files(export_links, export_download_dir)
+            try:
+                downloaded_files = await client.download_files(download_links, download_dir)
+                if export_links:
+                    export_download_dir = Path(download_dir) / "exported"
+                    exported_files = await client.download_files(export_links, export_download_dir)
+            except Exception as e:
+                # Re-raise any download-related errors (DownloadError, etc.)
+                _logger.error(f"Download failed: {e}")
+                raise
 
         result = QuickEditResult(
             project_uuid=project_uuid,
