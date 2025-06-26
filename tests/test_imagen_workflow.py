@@ -252,7 +252,7 @@ class TestQuickEditWorkflow:
             mock_client.get_export_links.assert_called_once_with("test-project-uuid")
 
             # Verify client created with custom URL
-            mock_client_class.assert_called_once_with("test-key", "https://custom.api.com")
+            mock_client_class.assert_called_once_with("test-key", "https://custom.api.com", logger=None, logger_level=None)
 
     @pytest.mark.asyncio
     async def test_quick_edit_no_successful_uploads(self, mock_client_factory):
