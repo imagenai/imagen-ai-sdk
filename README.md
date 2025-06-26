@@ -24,13 +24,20 @@ export IMAGEN_API_KEY="your_api_key_here"
 ### 3. Edit Photos (One Line!)
 ```python
 import asyncio
-from imagen_sdk import quick_edit
+from imagen_sdk import quick_edit, EditOptions
 
 async def main():
+    # Define basic editing options
+    edit_options = EditOptions(
+        crop=True,
+        straighten=True
+    )
+    
     result = await quick_edit(
         api_key="your_api_key",
         profile_key=5700,
-        image_paths=["photo1.dng", "photo2.dng"],  # DNG format recommended
+        image_paths=["photo1.jpg", "photo2.dng", "photo3.cr2"],  # Supports multiple formats
+        edit_options=edit_options,
         download=True
     )
     print(f"✅ Done! {len(result.downloaded_files)} edited photos")
@@ -49,7 +56,49 @@ asyncio.run(main())
 | Inconsistent editing style | Professional AI consistency |
 | Manual file management | Automatic downloads |
 
-> **💡 Pro Tip**: For best results, use **DNG (Digital Negative)** files. The AI works optimally with RAW data and produces higher quality edits than JPEG files.
+> **💡 Pro Tip**: Start by using the Imagen AI app to perfect your editing style, then use the API to automate that exact workflow at scale.
+
+---
+
+## 📸 Supported File Formats
+
+Imagen AI supports a wide range of photography file formats:
+
+- **RAW formats**: DNG, CR2, CR3, NEF, ARW, ORF, RAF, RW2, and more
+- **Standard formats**: JPEG, JPG, PNG, TIFF
+- **Best results**: RAW files (DNG, CR2, NEF, etc.) provide the highest quality output
+
+> **🚨 Important**: A single project can contain **either** RAW files **or** JPEG/standard files, but **not both**. Mix different file types in separate projects.
+
+---
+
+## 🔄 Understanding the Workflow
+
+### **What You Get Back**
+The SDK returns **Lightroom-compatible edit instructions** (XMP files) that preserve your original files and allow for non-destructive editing. You can:
+- Open the edited files directly in Lightroom
+- Further adjust the AI-generated edits
+- Export to any format you need
+
+### **Profile Keys: Your Editing Style**
+Profile keys represent your unique editing style learned by the AI:
+1. **Start with the Imagen AI app** to train your personal editing profile
+2. **Perfect your style** with 3,000+ edited photos in the app
+3. **Get your profile key** and use it in the API for consistent automation
+4. **Scale your workflow** - apply your exact editing style to thousands of photos
+
+### **Export Options**
+You can also export final JPEG files directly:
+```python
+result = await quick_edit(
+    api_key="your_api_key",
+    profile_key=5700,
+    image_paths=["photo1.cr2", "photo2.nef"],
+    export=True,  # Export to JPEG
+    download=True
+)
+# Access exported JPEGs via result.exported_files
+```
 
 ---
 
@@ -58,21 +107,46 @@ asyncio.run(main())
 ### **Minimal Example**
 ```python
 import asyncio
-from imagen_sdk import quick_edit
+from imagen_sdk import quick_edit, EditOptions
 
-# Edit all DNG files in current directory (recommended format)
+# Edit all supported files in current directory
 async def edit_photos():
     from pathlib import Path
-    photos = [str(p) for p in Path('.').glob('*.dng')]  # DNG files work best
     
-    if not photos:
-        print("No DNG files found. Add some .dng files to this directory.")
+    # Find RAW files (recommended - use find_supported_files() utility in future SDK versions)
+    raw_extensions = ['*.dng', '*.cr2', '*.cr3', '*.nef', '*.arw', '*.orf', '*.raf', '*.rw2']
+    raw_photos = []
+    for ext in raw_extensions:
+        raw_photos.extend([str(p) for p in Path('.').glob(ext)])
+    
+    # Find JPEG files (separate project needed)
+    jpeg_extensions = ['*.jpg', '*.jpeg']
+    jpeg_photos = []
+    for ext in jpeg_extensions:
+        jpeg_photos.extend([str(p) for p in Path('.').glob(ext)])
+    
+    # Process RAW files first (if any)
+    if raw_photos:
+        print(f"Processing {len(raw_photos)} RAW files...")
+        photos = raw_photos
+    elif jpeg_photos:
+        print(f"Processing {len(jpeg_photos)} JPEG files...")
+        photos = jpeg_photos
+    else:
+        print("No supported image files found. Add some photos to this directory.")
         return
+    
+    # Basic editing options
+    edit_options = EditOptions(
+        crop=True,
+        straighten=True
+    )
     
     result = await quick_edit(
         api_key="your_api_key",
         profile_key=5700,
-        image_paths=photos,
+        image_paths=photos,  # Remember: all files must be same type (RAW or JPEG)
+        edit_options=edit_options,
         download=True,
         download_dir="edited_photos"
     )
@@ -91,6 +165,7 @@ async def process_wedding():
     # Define editing options for portraits
     portrait_options = EditOptions(
         crop=True,
+        straighten=True,
         portrait_crop=True, 
         smooth_skin=True
     )
@@ -98,15 +173,17 @@ async def process_wedding():
     result = await quick_edit(
         api_key="your_api_key",
         profile_key=5700,
-        image_paths=["ceremony_01.dng", "portraits_01.dng", "reception_01.dng"],  # DNG recommended
+        image_paths=["ceremony_01.cr2", "portraits_01.nef", "reception_01.dng"],
         project_name="Sarah & Mike Wedding",
         photography_type=PhotographyType.WEDDING,
         edit_options=portrait_options,
+        export=True,  # Also export final JPEGs
         download=True,
         download_dir="wedding_edited"
     )
     
-    print(f"Wedding photos ready: {len(result.downloaded_files)} files")
+    print(f"Wedding photos ready: {len(result.downloaded_files)} XMP files")
+    print(f"Exported JPEGs: {len(result.exported_files)} files")
 
 asyncio.run(process_wedding())
 ```
@@ -125,12 +202,16 @@ async def advanced_workflow():
         # 2. Upload photos
         upload_result = await client.upload_images(
             project_uuid,
-            ["photo1.dng", "photo2.dng"]  # DNG format works best
+            ["photo1.cr2", "photo2.nef"]  # Multiple formats supported
         )
         print(f"Uploaded: {upload_result.successful}/{upload_result.total}")
         
-        # 3. Start editing  
-        edit_options = EditOptions(crop=True, straighten=True)
+        # 3. Start editing with AI tools
+        edit_options = EditOptions(
+            crop=True, 
+            straighten=True,
+            portrait_crop=True
+        )
         await client.start_editing(
             project_uuid,
             profile_key=5700,
@@ -139,15 +220,19 @@ async def advanced_workflow():
         )
         print("Editing complete!")
         
-        # 4. Get download links
+        # 4. Get download links for XMP files
         download_links = await client.get_download_links(project_uuid)
         
-        # 5. Download files
+        # 5. Export to JPEG (optional)
+        await client.export_project(project_uuid)
+        export_links = await client.get_export_links(project_uuid)
+        
+        # 6. Download files
         downloaded_files = await client.download_files(
             download_links, 
             output_dir="my_edited_photos"
         )
-        print(f"Downloaded {len(downloaded_files)} edited photos")
+        print(f"Downloaded {len(downloaded_files)} XMP files")
 
 asyncio.run(advanced_workflow())
 ```
@@ -172,7 +257,7 @@ pip install --upgrade imagen-ai-sdk
 
 ### **Get Your API Key**
 1. **Sign up** at [imagen-ai.com](https://imagen-ai.com)
-2. **Contact support** at [support@imagen-ai.com](mailto:support@imagen-ai.com) with your account email
+2. **Contact support** via [support.imagen-ai.com](https://support.imagen-ai.com/hc) with your account email
 3. **Set environment variable**:
    ```bash
    # Mac/Linux
@@ -229,6 +314,8 @@ await client.create_project("Wedding Photos")  # Might fail if name exists
 - **Include client/session info** for easy identification
 - **Consider auto-generated names** for quick testing
 - **Save project UUIDs** if you need to reference projects later
+- **Separate file types**: Create different projects for RAW and JPEG files
+- **Group similar files**: Keep wedding ceremony photos separate from reception photos
 
 ---
 
@@ -270,7 +357,7 @@ options = EditOptions(
 result = await quick_edit(
     api_key="your_key",
     profile_key=5700,
-    image_paths=["photo.dng"],
+    image_paths=["photo.cr2"],
     edit_options=options
 )
 ```
@@ -306,8 +393,8 @@ result = await quick_edit(
 ```
 **Solutions:**
 1. Check file paths are correct and files exist
-2. **Use DNG files for best results** - Imagen AI works optimally with RAW data
-3. Ensure files are supported formats (DNG recommended, also JPG, PNG, RAW)
+2. **Ensure files are in supported formats** (RAW files like CR2, NEF, DNG or JPEG, PNG, TIFF)
+3. **Remember**: A single project cannot mix RAW and JPEG files - separate them into different projects
 4. Use absolute paths if relative paths aren't working
 
 #### **Upload Failures**
@@ -348,15 +435,17 @@ logging.basicConfig(level=logging.DEBUG)
 #### **Test with Minimal Example**
 ```python
 import asyncio
-from imagen_sdk import quick_edit
+from imagen_sdk import quick_edit, EditOptions
 
 async def test():
     try:
-        # Test with one DNG file (recommended format)
+        # Test with one supported file
+        edit_options = EditOptions(crop=True, straighten=True)
         result = await quick_edit(
             api_key="your_api_key",
             profile_key=5700,
-            image_paths=["test_photo.dng"]  # DNG works best
+            image_paths=["test_photo.jpg"],  # Any supported format
+            edit_options=edit_options
         )
         print("✅ Success!")
     except Exception as e:
@@ -371,12 +460,12 @@ asyncio.run(test())
 
 ### **Need Help?**
 - **SDK Issues**: Create an issue with error details and SDK version
-- **API Questions**: [support@imagen-ai.com](mailto:support@imagen-ai.com)
-- **Account Issues**: [support@imagen-ai.com](mailto:support@imagen-ai.com)
+- **API Questions**: Visit [support.imagen-ai.com](https://support.imagen-ai.com/hc)
+- **Account Issues**: Contact support via [support.imagen-ai.com](https://support.imagen-ai.com/hc)
 
 ### **Resources**
 - **Main Website**: [imagen-ai.com](https://imagen-ai.com)
-- **API Documentation**: [api-beta.imagen-ai.com/docs](https://api-beta.imagen-ai.com/docs)
+- **Support Center**: [support.imagen-ai.com](https://support.imagen-ai.com/hc)
 - **Community**: [Imagen AI Facebook Group](https://facebook.com/groups/imagenai)
 
 ### **Before Contacting Support**
@@ -415,27 +504,46 @@ await client.upload_images(
 
 ### **Batch Processing**
 ```python
-# Process DNG files in batches for large collections
+# Process files in batches for large collections
 import asyncio
 from pathlib import Path
 
 async def process_large_collection():
-    all_photos = list(Path("photos").glob("*.dng"))  # DNG files recommended
-    batch_size = 50
+    # Find RAW files (future SDK versions will include find_supported_files() utility)
+    raw_extensions = ['*.dng', '*.cr2', '*.cr3', '*.nef', '*.arw', '*.orf', '*.raf', '*.rw2']
+    raw_photos = []
+    for ext in raw_extensions:
+        raw_photos.extend(list(Path("photos").glob(ext)))
     
-    for i in range(0, len(all_photos), batch_size):
-        batch = all_photos[i:i + batch_size]
-        print(f"Processing batch {i//batch_size + 1}...")
+    # Find JPEG files for separate processing
+    jpeg_extensions = ['*.jpg', '*.jpeg']
+    jpeg_photos = []
+    for ext in jpeg_extensions:
+        jpeg_photos.extend(list(Path("photos").glob(ext)))
+    
+    # Process each file type separately (cannot mix in same project)
+    for file_type, photos in [("RAW", raw_photos), ("JPEG", jpeg_photos)]:
+        if not photos:
+            continue
+            
+        print(f"Processing {len(photos)} {file_type} files...")
+        batch_size = 50
         
-        result = await quick_edit(
-            api_key="your_key",
-            profile_key=5700,
-            image_paths=[str(p) for p in batch],
-            download=True,
-            download_dir=f"edited_batch_{i//batch_size + 1}"
-        )
-        
-        print(f"Batch complete: {len(result.downloaded_files)} photos")
+        for i in range(0, len(photos), batch_size):
+            batch = photos[i:i + batch_size]
+            print(f"Processing {file_type} batch {i//batch_size + 1}...")
+            
+            edit_options = EditOptions(crop=True, straighten=True)
+            result = await quick_edit(
+                api_key="your_key",
+                profile_key=5700,
+                image_paths=[str(p) for p in batch],
+                edit_options=edit_options,
+                download=True,
+                download_dir=f"edited_{file_type.lower()}_batch_{i//batch_size + 1}"
+            )
+            
+            print(f"Batch complete: {len(result.downloaded_files)} photos")
 
 asyncio.run(process_large_collection())
 ```
