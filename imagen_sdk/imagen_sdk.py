@@ -38,16 +38,66 @@ SUPPORTED_FILE_FORMATS = RAW_EXTENSIONS | JPG_EXTENSIONS
 # =============================================================================
 
 class ImagenClient:
-    """Main Imagen AI client for handling the editing workflow."""
+    """
+    Main Imagen AI client for handling the complete photo editing workflow.
+
+    This client provides a full-featured interface to the Imagen AI API, supporting
+    project creation, image uploads, AI-powered editing, status monitoring, and
+    download management. It handles authentication, error management, and resource
+    cleanup automatically.
+
+    Features:
+        - Async context manager support for automatic session cleanup
+        - Concurrent uploads and downloads with configurable limits
+        - Progress tracking callbacks for long-running operations
+        - Comprehensive error handling with specific exception types
+        - Automatic retry and status polling for editing operations
+        - Support for both RAW and JPEG file formats
+        - MD5 hash verification for upload integrity
+        - Custom logging configuration
+
+    Example:
+        Basic usage with context manager:
+        ```python
+        async with ImagenClient("your_api_key") as client:
+            project_uuid = await client.create_project("My Project")
+            upload_summary = await client.upload_images(project_uuid, ["photo1.jpg"])
+            await client.start_editing(project_uuid, profile_key=5700)
+            download_links = await client.get_download_links(project_uuid)
+            files = await client.download_files(download_links, "output")
+        ```
+
+    Attributes:
+        api_key (str): The Imagen AI API key for authentication
+        base_url (str): Base URL for the Imagen AI API
+        logger (logging.Logger): Logger instance for debugging and monitoring
+    """
     _logger = _default_logger
 
     @classmethod
     def set_logger(cls, logger: logging.Logger, level: Optional[int] = None):
         """
         Set a custom logger and optional logging level for all ImagenClient instances.
+
+        This class method allows you to configure logging for all SDK operations.
+        Useful for integrating with existing logging infrastructure or adjusting
+        verbosity levels.
+
         Args:
-            logger: A logging.Logger instance to use.
-            level: Optional logging level (e.g., logging.INFO).
+            logger (logging.Logger): A logging.Logger instance to use for all SDK operations
+            level (Optional[int]): Optional logging level (e.g., logging.INFO, logging.DEBUG)
+
+        Example:
+            ```python
+            import logging
+
+            # Create custom logger
+            custom_logger = logging.getLogger("my_app.imagen")
+            custom_logger.setLevel(logging.INFO)
+
+            # Set for all client instances
+            ImagenClient.set_logger(custom_logger, logging.DEBUG)
+            ```
         """
         cls._logger = logger
         if level is not None:
@@ -59,13 +109,24 @@ class ImagenClient:
         Initialize the Imagen AI client.
 
         Args:
-            api_key: Your Imagen AI API key
-            base_url: Base URL for the API (default: production URL)
-            logger: Optional custom logger instance
-            logger_level: Optional logging level for the logger
+            api_key (str): Your Imagen AI API key obtained from the Imagen AI platform
+            base_url (str): Base URL for the API (default: production URL)
+            logger (Optional[logging.Logger]): Optional custom logger instance for this client
+            logger_level (Optional[int]): Optional logging level for the logger
 
         Raises:
             ValueError: If api_key is empty or None
+
+        Example:
+            ```python
+            # Basic initialization
+            client = ImagenClient("your_api_key")
+
+            # With custom logging
+            import logging
+            custom_logger = logging.getLogger("my_app")
+            client = ImagenClient("your_api_key", logger=custom_logger, logger_level=logging.DEBUG)
+            ```
         """
         if not api_key or not api_key.strip():
             raise ValueError("API key cannot be empty")
@@ -84,7 +145,12 @@ class ImagenClient:
         self._logger.debug(f"Initialized ImagenClient with base_url: {self.base_url}")
 
     def _get_session(self) -> httpx.AsyncClient:
-        """Get or create an HTTP session."""
+        """
+        Get or create an HTTP session with proper authentication headers.
+
+        Returns:
+            httpx.AsyncClient: Configured HTTP client with API key authentication
+        """
         if self._session is None:
             self._session = httpx.AsyncClient(
                 headers={
@@ -97,7 +163,23 @@ class ImagenClient:
         return self._session
 
     async def close(self):
-        """Close the HTTP session."""
+        """
+        Close the HTTP session and clean up resources.
+
+        This method should be called when you're done with the client to ensure
+        proper cleanup of network resources. When using the client as an async
+        context manager, this is called automatically.
+
+        Example:
+            ```python
+            client = ImagenClient("api_key")
+            try:
+                # Use client
+                pass
+            finally:
+                await client.close()
+            ```
+        """
         if self._session:
             await self._session.aclose()
             self._session = None
@@ -111,15 +193,15 @@ class ImagenClient:
 
     async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """
-        Make an HTTP request to the API.
+        Make an HTTP request to the API with proper error handling.
 
         Args:
-            method: HTTP method (GET, POST, etc.)
-            endpoint: API endpoint
-            **kwargs: Additional request parameters
+            method (str): HTTP method (GET, POST, etc.)
+            endpoint (str): API endpoint path
+            **kwargs: Additional request parameters passed to httpx
 
         Returns:
-            JSON response as dictionary
+            Dict[str, Any]: JSON response as dictionary
 
         Raises:
             AuthenticationError: If authentication fails (401)
@@ -164,16 +246,37 @@ class ImagenClient:
 
     async def create_project(self, name: Optional[str] = None) -> str:
         """
-        Create a new project.
+        Create a new project in the Imagen AI platform.
+
+        Projects are containers for organizing related images and edits. Each project
+        can contain either RAW files or JPEG files, but not both types mixed together.
+        Project names must be unique across your account.
 
         Args:
-            name: Optional project name
+            name (Optional[str]): Optional project name. If not provided, a UUID will be generated.
+                                Must be unique across your account.
 
         Returns:
-            Project UUID
+            str: Project UUID that can be used for subsequent operations
 
         Raises:
-            ProjectError: If project creation fails
+            ProjectError: If project creation fails (e.g., name already exists)
+            AuthenticationError: If API key is invalid
+            ImagenError: For other API-related errors
+
+        Example:
+            ```python
+            # Create project with custom name
+            project_uuid = await client.create_project("Wedding_Photos_2024")
+
+            # Create project with auto-generated UUID
+            project_uuid = await client.create_project()
+            ```
+
+        Note:
+            Project names must be unique. If a project with the same name already exists,
+            this method will raise a ProjectError. Consider using timestamps or client
+            identifiers in project names to ensure uniqueness.
         """
         data = {}
         if name:
@@ -196,20 +299,59 @@ class ImagenClient:
                             max_concurrent: int = 5, calculate_md5: bool = False,
                             progress_callback: Optional[Callable[[int, int, str], None]] = None) -> UploadSummary:
         """
-        Upload images to a project.
+        Upload images to a project with concurrent processing and progress tracking.
+
+        This method handles the complete upload workflow: validates files, obtains
+        presigned URLs from the API, and uploads files concurrently to cloud storage.
+        Supports both RAW and JPEG formats, but all files in a single project must
+        be of the same type.
 
         Args:
-            project_uuid: UUID of the target project
-            image_paths: List of local image file paths
-            max_concurrent: Maximum concurrent uploads (default: 5)
-            calculate_md5: Whether to calculate MD5 hashes (default: False)
-            progress_callback: Optional progress callback function
+            project_uuid (str): UUID of the target project from create_project()
+            image_paths (List[Union[str, Path]]): List of local image file paths to upload.
+                                                All files must be of the same type (RAW or JPEG).
+            max_concurrent (int): Maximum concurrent uploads (default: 5).
+                                Adjust based on your internet connection speed.
+            calculate_md5 (bool): Whether to calculate MD5 hashes for upload verification (default: False).
+                                 Enables integrity checking but increases processing time.
+            progress_callback (Optional[Callable[[int, int, str], None]]): Optional callback function
+                             called during upload progress. Receives (current_index, total_files, current_file_path).
 
         Returns:
-            Summary of upload results
+            UploadSummary: Object containing upload statistics and detailed results:
+                - total: Total number of files attempted
+                - successful: Number of successfully uploaded files
+                - failed: Number of failed uploads
+                - results: List of UploadResult objects with details for each file
 
         Raises:
             UploadError: If no valid files found or upload fails
+            ValueError: If max_concurrent < 1
+            ProjectError: If project doesn't exist or is invalid
+            AuthenticationError: If API key is invalid
+
+        Example:
+            ```python
+            def show_progress(current, total, filename):
+                percent = (current / total) * 100
+                print(f"Uploading: {percent:.1f}% - {filename}")
+
+            upload_summary = await client.upload_images(
+                project_uuid="project-123",
+                image_paths=["photo1.cr2", "photo2.nef", "photo3.dng"],
+                max_concurrent=3,  # Slower connection
+                calculate_md5=True,  # Enable integrity checking
+                progress_callback=show_progress
+            )
+
+            print(f"Uploaded {upload_summary.successful}/{upload_summary.total} files")
+            ```
+
+        Note:
+            - All files in a project must be the same type (all RAW or all JPEG)
+            - Larger max_concurrent values may improve speed but use more bandwidth
+            - MD5 calculation adds processing time but ensures upload integrity
+            - Invalid file paths are automatically skipped and logged
         """
         if max_concurrent < 1:
             raise ValueError("max_concurrent must be at least 1")
@@ -290,19 +432,69 @@ class ImagenClient:
                             photography_type: Optional[PhotographyType] = None,
                             edit_options: Optional[EditOptions] = None) -> StatusDetails:
         """
-        Start editing images in a project.
+        Start AI-powered editing of images in a project and wait for completion.
+
+        This method initiates the editing process using your trained AI profile and
+        optional editing parameters. It automatically polls the status until the
+        editing is complete or fails. The AI applies your learned editing style
+        consistently across all images in the project.
 
         Args:
-            project_uuid: UUID of the project
-            profile_key: Profile to use for editing
-            photography_type: Optional photography type for optimization
-            edit_options: Optional editing parameters
+            project_uuid (str): UUID of the project containing uploaded images
+            profile_key (int): Profile ID representing your trained editing style.
+                              Obtain this from the Imagen AI app after training your profile.
+            photography_type (Optional[PhotographyType]): Optional photography type for optimization.
+                                                        Helps the AI understand the image context.
+                                                        Options: PORTRAITS, WEDDING, EVENTS, etc.
+            edit_options (Optional[EditOptions]): Optional editing parameters to customize the process:
+                                                 - crop: Auto-crop images
+                                                 - straighten: Auto-straighten horizons
+                                                 - portrait_crop: Portrait-specific cropping
+                                                 - smooth_skin: Skin smoothing for portraits
+                                                 - hdr_merge: HDR bracket merging
 
         Returns:
-            Final status details when editing is complete
+            StatusDetails: Final status information when editing completes:
+                          - status: "Completed" or "Failed"
+                          - progress: Final progress percentage
+                          - details: Additional status information
 
         Raises:
-            ProjectError: If editing fails
+            ProjectError: If editing fails or project doesn't exist
+            AuthenticationError: If API key is invalid
+            ImagenError: For other API-related errors
+
+        Example:
+            ```python
+            from imagen_sdk import PhotographyType, EditOptions
+
+            # Basic editing
+            status = await client.start_editing(
+                project_uuid="project-123",
+                profile_key=5700
+            )
+
+            # Advanced editing with options
+            edit_options = EditOptions(
+                crop=True,
+                straighten=True,
+                portrait_crop=True,
+                smooth_skin=True
+            )
+
+            status = await client.start_editing(
+                project_uuid="project-123",
+                profile_key=5700,
+                photography_type=PhotographyType.WEDDING,
+                edit_options=edit_options
+            )
+            ```
+
+        Note:
+            - This method blocks until editing completes (can take several minutes)
+            - Progress is logged automatically during the process
+            - Profile keys are obtained from training in the Imagen AI app
+            - The AI generates XMP files compatible with Lightroom/Photoshop
         """
         edit_data: Dict[str, Any] = {'profile_key': int(profile_key)}
         if photography_type:
@@ -316,16 +508,38 @@ class ImagenClient:
 
     async def get_download_links(self, project_uuid: str) -> List[str]:
         """
-        Get download links for edited images.
+        Get download links for edited images (XMP files).
+
+        After editing completes, this method retrieves temporary download URLs for
+        the generated XMP edit files. These XMP files contain Lightroom-compatible
+        edit instructions that can be applied to your original images.
 
         Args:
-            project_uuid: UUID of the project
+            project_uuid (str): UUID of the project with completed editing
 
         Returns:
-            List of download URLs
+            List[str]: List of temporary download URLs for XMP files.
+                      URLs are valid for a limited time and should be used promptly.
 
         Raises:
-            ProjectError: If getting links fails
+            ProjectError: If getting links fails or project doesn't exist
+            AuthenticationError: If API key is invalid
+            ImagenError: For other API-related errors
+
+        Example:
+            ```python
+            # Get download links after editing completes
+            download_links = await client.get_download_links("project-123")
+            print(f"Ready to download {len(download_links)} XMP files")
+
+            # Download the files
+            local_files = await client.download_files(download_links, "my_edits")
+            ```
+
+        Note:
+            - Download URLs are temporary and expire after a certain time
+            - XMP files can be opened in Lightroom, Photoshop, or other compatible software
+            - The original image files are not modified; XMP files contain edit instructions
         """
         self._logger.debug(f"Getting download links for project {project_uuid}")
         response_json = await self._make_request('GET', f'/projects/{project_uuid}/edit/get_temporary_download_links')
@@ -341,16 +555,44 @@ class ImagenClient:
 
     async def export_project(self, project_uuid: str) -> StatusDetails:
         """
-        Export project images.
+        Export project images to final JPEG format and wait for completion.
+
+        This method converts the AI-edited images to final JPEG files that can be
+        delivered directly to clients. The export process applies all edits and
+        generates high-quality JPEG files ready for use.
 
         Args:
-            project_uuid: UUID of the project
+            project_uuid (str): UUID of the project with completed editing
 
         Returns:
-            Final status details when export is complete
+            StatusDetails: Final status information when export completes:
+                          - status: "Completed" or "Failed"
+                          - progress: Final progress percentage
+                          - details: Additional status information
 
         Raises:
-            ProjectError: If export fails
+            ProjectError: If export fails or project doesn't exist
+            AuthenticationError: If API key is invalid
+            ImagenError: For other API-related errors
+
+        Example:
+            ```python
+            # Export after editing completes
+            await client.start_editing(project_uuid, profile_key=5700)
+
+            # Export to JPEG
+            export_status = await client.export_project(project_uuid)
+            print(f"Export completed with status: {export_status.status}")
+
+            # Get export download links
+            export_links = await client.get_export_links(project_uuid)
+            ```
+
+        Note:
+            - This method blocks until export completes
+            - Export generates final JPEG files ready for delivery
+            - Progress is logged automatically during the process
+            - Use get_export_links() after this completes to download JPEG files
         """
         self._logger.info(f"Starting export for project {project_uuid}")
         await self._make_request('POST', f'/projects/{project_uuid}/export')
@@ -358,16 +600,38 @@ class ImagenClient:
 
     async def get_export_links(self, project_uuid: str) -> List[str]:
         """
-        Get download links for exported images.
+        Get download links for exported JPEG images.
+
+        After export completes, this method retrieves temporary download URLs for
+        the final JPEG files. These are the client-ready, fully processed images
+        with all AI edits applied.
 
         Args:
-            project_uuid: UUID of the project
+            project_uuid (str): UUID of the project with completed export
 
         Returns:
-            List of export download URLs
+            List[str]: List of temporary download URLs for JPEG files.
+                      URLs are valid for a limited time and should be used promptly.
 
         Raises:
-            ProjectError: If getting links fails
+            ProjectError: If getting links fails or project doesn't exist
+            AuthenticationError: If API key is invalid
+            ImagenError: For other API-related errors
+
+        Example:
+            ```python
+            # Get export links after export completes
+            export_links = await client.get_export_links("project-123")
+            print(f"Ready to download {len(export_links)} JPEG files")
+
+            # Download the exported files
+            jpeg_files = await client.download_files(export_links, "client_delivery")
+            ```
+
+        Note:
+            - Download URLs are temporary and expire after a certain time
+            - JPEG files are final, client-ready images
+            - These files have all AI edits applied and are ready for delivery
         """
         self._logger.debug(f"Getting export links for project {project_uuid}")
         response_json = await self._make_request('GET', f'/projects/{project_uuid}/export/get_temporary_download_links')
@@ -385,19 +649,61 @@ class ImagenClient:
                              max_concurrent: int = 5,
                              progress_callback: Optional[Callable[[int, int, str], None]] = None) -> List[str]:
         """
-        Download files from the provided download links.
+        Download files from provided URLs with concurrent processing and progress tracking.
+
+        This method handles downloading multiple files concurrently from the temporary
+        URLs provided by get_download_links() or get_export_links(). It automatically
+        creates the output directory and manages concurrent downloads for optimal performance.
 
         Args:
-            download_links: List of URLs to download
-            output_dir: Directory to save downloaded files (default: "downloads")
-            max_concurrent: Maximum number of concurrent downloads (default: 5)
-            progress_callback: Optional callback function for progress updates
+            download_links (List[str]): List of download URLs from get_download_links() or get_export_links()
+            output_dir (Union[str, Path]): Directory to save downloaded files (default: "downloads").
+                                         Directory will be created if it doesn't exist.
+            max_concurrent (int): Maximum number of concurrent downloads (default: 5).
+                                Adjust based on your internet connection speed.
+            progress_callback (Optional[Callable[[int, int, str], None]]): Optional callback function
+                             called during download progress. Receives (current_index, total_files, status_message).
 
         Returns:
-            List of local file paths of downloaded files
+            List[str]: List of local file paths where files were successfully downloaded
 
         Raises:
-            DownloadError: If no files could be downloaded
+            DownloadError: If no files could be downloaded or output directory issues
+            ValueError: If max_concurrent < 1
+            ImagenError: For network-related download failures
+
+        Example:
+            ```python
+            def download_progress(current, total, message):
+                percent = (current / total) * 100
+                print(f"Download: {percent:.1f}% - {message}")
+
+            # Download XMP files
+            download_links = await client.get_download_links(project_uuid)
+            xmp_files = await client.download_files(
+                download_links,
+                output_dir="edited_xmps",
+                max_concurrent=3,
+                progress_callback=download_progress
+            )
+
+            # Download JPEG files
+            export_links = await client.get_export_links(project_uuid)
+            jpeg_files = await client.download_files(
+                export_links,
+                output_dir="final_jpegs",
+                progress_callback=download_progress
+            )
+
+            print(f"Downloaded {len(xmp_files)} XMP and {len(jpeg_files)} JPEG files")
+            ```
+
+        Note:
+            - Downloads are performed concurrently for better performance
+            - Failed downloads are logged but don't stop other downloads
+            - Filenames are automatically extracted from URLs when possible
+            - Progress callback is called before and after each file download
+            - Output directory is created automatically if it doesn't exist
         """
         if max_concurrent < 1:
             raise ValueError("max_concurrent must be at least 1")
@@ -487,13 +793,42 @@ class ImagenClient:
 
     async def get_profiles(self) -> List[Profile]:
         """
-        Get available editing profiles.
+        Get available editing profiles from your Imagen AI account.
+
+        Profiles represent your trained AI editing styles. Each profile is created
+        by training the AI with your manually edited photos in the Imagen AI app.
+        You'll use the profile_key from these profiles in editing operations.
 
         Returns:
-            List of available profiles
+            List[Profile]: List of available profiles with details:
+                          - profile_key: Unique identifier for use in editing
+                          - profile_name: Human-readable name of the profile
+                          - profile_type: Type/tier of the profile
+                          - image_type: Whether profile works with "RAW" or "JPG" files
 
         Raises:
             ImagenError: If getting profiles fails
+            AuthenticationError: If API key is invalid
+
+        Example:
+            ```python
+            profiles = await client.get_profiles()
+            for profile in profiles:
+                print(f"Profile: {profile.profile_name}")
+                print(f"  Key: {profile.profile_key}")
+                print(f"  Type: {profile.image_type}")
+                print(f"  Tier: {profile.profile_type}")
+
+            # Use a specific profile for editing
+            wedding_profile = next(p for p in profiles if "wedding" in p.profile_name.lower())
+            await client.start_editing(project_uuid, wedding_profile.profile_key)
+            ```
+
+        Note:
+            - Profiles are created by training in the Imagen AI app
+            - Each profile works with either RAW or JPEG files, not both
+            - Profile keys are required for all editing operations
+            - Profile names and types help you identify the right style for your project
         """
         self._logger.debug("Getting available profiles")
         response_json = await self._make_request('GET', '/profiles')
@@ -510,7 +845,7 @@ class ImagenClient:
     @staticmethod
     async def _calculate_md5(file_path: Path) -> str:
         """
-        Calculate MD5 hash of a file.
+        Calculate MD5 hash of a file for integrity verification.
 
         Args:
             file_path: Path to the file
@@ -607,7 +942,13 @@ class ImagenClient:
             check_interval = min(check_interval * 1.2, max_interval)
 
     @property
-    def logger(self):
+    def logger(self) -> logging.Logger:
+        """
+        Get the logger instance used by this client.
+
+        Returns:
+            logging.Logger: The logger instance for this client
+        """
         return self._logger
 
 
@@ -619,15 +960,29 @@ async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai
     """
     Get available editing profiles using a standalone function.
 
+    This is a convenience function that creates a temporary client to fetch profiles.
+    Use this when you just need to check available profiles without creating a full client.
+
     Args:
-        api_key: Your Imagen AI API key
-        base_url: API base URL (default: production URL)
+        api_key (str): Your Imagen AI API key
+        base_url (str): API base URL (default: production URL)
 
     Returns:
-        List of available profiles
+        List[Profile]: List of available profiles with their details
 
     Raises:
         ImagenError: If getting profiles fails
+        AuthenticationError: If API key is invalid
+
+    Example:
+        ```python
+        from imagen_sdk import get_profiles
+
+        # Quick profile check
+        profiles = await get_profiles("your_api_key")
+        for profile in profiles:
+            print(f"{profile.profile_name} (key: {profile.profile_key})")
+        ```
     """
     async with ImagenClient(api_key, base_url) as client:
         return await client.get_profiles()
@@ -635,8 +990,40 @@ async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai
 
 def check_files_match_profile_type(image_paths: List[Union[str, Path]], profile: Profile, logger: logging.Logger):
     """
-    Check that all files match the profile's image_type (RAW or JPG).
-    Raise UploadError if there is a mix or mismatch.
+    Validate that all files match the profile's image_type (RAW or JPG).
+
+    This utility function ensures file type consistency before upload. Projects can
+    contain either all RAW files or all JPEG files, but not a mix. This validation
+    prevents upload errors and provides clear error messages.
+
+    Args:
+        image_paths (List[Union[str, Path]]): List of image file paths to validate
+        profile (Profile): Profile object with image_type specification
+        logger (logging.Logger): Logger for error reporting
+
+    Raises:
+        UploadError: If files don't match profile type or are mixed types
+
+    Example:
+        ```python
+        from imagen_sdk import get_profile, check_files_match_profile_type
+        import logging
+
+        # Get profile and validate files
+        profile = await get_profile("api_key", profile_key=5700)
+        files = ["photo1.cr2", "photo2.nef", "photo3.dng"]  # All RAW
+
+        logger = logging.getLogger("my_app")
+        check_files_match_profile_type(files, profile, logger)
+
+        # Now safe to upload - all files match profile type
+        ```
+
+    Note:
+        - RAW profiles only accept RAW files (.cr2, .nef, .dng, etc.)
+        - JPG profiles only accept JPEG files (.jpg, .jpeg)
+        - Mixed file types will raise an UploadError with specific details
+        - This check should be done before calling upload_images()
     """
     if profile.image_type.upper() == "RAW":
         allowed_exts = RAW_EXTENSIONS
@@ -684,31 +1071,91 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
                      logger: Optional[logging.Logger] = None,
                      logger_level: Optional[int] = None) -> QuickEditResult:
     """
-    Complete workflow: create project, upload, edit, and optionally export and download.
+    Complete one-line workflow: create project, upload, edit, and optionally export and download.
+
+    This is the main convenience function that handles the entire Imagen AI workflow
+    in a single call. It's perfect for simple automation scripts and batch processing.
+    The function automatically handles file validation, project creation, uploads,
+    editing, and optional export/download steps.
 
     Args:
-        api_key: Your Imagen AI API key
-        profile_key: Profile ID to use for editing
-        image_paths: List of local image file paths to upload
-        project_name: Optional name for the project
-        photography_type: Optional photography type for optimization
-        export: Whether to export the images (default: False)
-        edit_options: Optional editing parameters
-        download: Whether to download the edited images (default: False)
-        download_dir: Directory to save downloaded files (default: "downloads")
-        base_url: API base URL (default: production URL)
-        logger: Optional custom logger instance for workflow logging
-        logger_level: Optional logging level for the logger
+        api_key (str): Your Imagen AI API key
+        profile_key (int): Profile ID to use for editing (from get_profiles())
+        image_paths (List[Union[str, Path]]): List of local image file paths to upload.
+                                            All files must be same type (RAW or JPEG).
+        project_name (Optional[str]): Optional name for the project. Must be unique.
+        photography_type (Optional[PhotographyType]): Optional photography type for AI optimization.
+                                                     e.g., PhotographyType.WEDDING, PhotographyType.PORTRAITS
+        export (bool): Whether to export final JPEG files (default: False)
+        edit_options (Optional[EditOptions]): Optional editing parameters for customization
+        download (bool): Whether to automatically download edited files (default: False)
+        download_dir (Union[str, Path]): Directory to save downloaded files (default: "downloads")
+        base_url (str): API base URL (default: production URL)
+        logger (Optional[logging.Logger]): Optional custom logger for workflow logging
+        logger_level (Optional[int]): Optional logging level
 
     Returns:
-        QuickEditResult with project info, upload summary, links, and optionally local file paths
+        QuickEditResult: Complete result object containing:
+                        - project_uuid: UUID of created project
+                        - upload_summary: Upload statistics and results
+                        - download_links: URLs for downloading XMP files
+                        - export_links: URLs for downloading JPEG files (if export=True)
+                        - downloaded_files: Local paths of downloaded XMP files (if download=True)
+                        - exported_files: Local paths of downloaded JPEG files (if export=True and download=True)
 
     Raises:
-        UploadError: If no files were uploaded successfully
+        UploadError: If no files uploaded successfully or file type validation fails
         ProjectError: If project creation, editing, or export fails
+        AuthenticationError: If API key is invalid
+        DownloadError: If download=True but download fails
         Various other errors from individual operations
+
+    Example:
+        ```python
+        from imagen_sdk import quick_edit, EditOptions, PhotographyType
+
+        # Simple editing (XMP files only)
+        result = await quick_edit(
+            api_key="your_api_key",
+            profile_key=5700,
+            image_paths=["wedding1.cr2", "wedding2.nef", "wedding3.dng"]
+        )
+        print(f"Project UUID: {result.project_uuid}")
+        print(f"Download links: {len(result.download_links)} XMP files ready")
+
+        # Advanced workflow with all options
+        edit_options = EditOptions(
+            crop=True,
+            straighten=True,
+            portrait_crop=True,
+            smooth_skin=True
+        )
+
+        result = await quick_edit(
+            api_key="your_api_key",
+            profile_key=5700,
+            image_paths=["photo1.cr2", "photo2.nef"],
+            project_name="Wedding_Photos_2024_01_15",
+            photography_type=PhotographyType.WEDDING,
+            edit_options=edit_options,
+            export=True,  # Also generate JPEG files
+            download=True,  # Automatically download all files
+            download_dir="wedding_delivery"
+        )
+
+        print(f"Downloaded {len(result.downloaded_files)} XMP files")
+        print(f"Downloaded {len(result.exported_files)} JPEG files")
+        ```
+
+    Note:
+        - All files must be the same type (all RAW or all JPEG)
+        - Project names must be unique across your account
+        - Setting download=True automatically downloads both XMP and JPEG files (if export=True)
+        - XMP files contain Lightroom-compatible edit instructions
+        - JPEG files are final, client-ready images (when export=True)
+        - This function handles all error cases and provides detailed error messages
     """
-    _logger = logger if logger is not None else ImagenClient._logger
+    _logger = logger if logger is not None else ImagenClient.logger
     if logger_level is not None:
         _logger.setLevel(logger_level)
     _logger.info(f"Starting quick_edit workflow with {len(image_paths)} images")
@@ -772,8 +1219,39 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
 
 async def get_profile(api_key: str, profile_key: int, base_url: str = "https://api-beta.imagen-ai.com/v1") -> Profile:
     """
-    Fetch all profiles using the API key and return the profile matching the given profile_key.
-    Raises UploadError if not found.
+    Fetch a specific profile by its key.
+
+    This convenience function retrieves a single profile by its profile_key.
+    Useful for validating profile keys and getting profile details before editing.
+
+    Args:
+        api_key (str): Your Imagen AI API key
+        profile_key (int): The specific profile key to retrieve
+        base_url (str): API base URL (default: production URL)
+
+    Returns:
+        Profile: The profile object with details like name, type, and image_type
+
+    Raises:
+        UploadError: If profile with the given key is not found
+        ImagenError: If API request fails
+        AuthenticationError: If API key is invalid
+
+    Example:
+        ```python
+        from imagen_sdk import get_profile
+
+        # Get specific profile details
+        profile = await get_profile("your_api_key", 5700)
+        print(f"Profile: {profile.profile_name}")
+        print(f"Works with: {profile.image_type} files")
+
+        # Use profile info for validation
+        if profile.image_type == "RAW":
+            print("This profile works with RAW files (.cr2, .nef, etc.)")
+        else:
+            print("This profile works with JPEG files (.jpg)")
+        ```
     """
     profiles = await get_profiles(api_key, base_url)
     for p in profiles:
