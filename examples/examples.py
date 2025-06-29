@@ -15,15 +15,14 @@ This example demonstrates the complete workflow for editing photos with Imagen A
 import asyncio
 import os
 import uuid
-from pathlib import Path
 
 # Import all necessary components from the SDK
 from imagen_sdk import (
+    EditOptions,
     ImagenClient,
     PhotographyType,
-    EditOptions,
     QuickEditResult,
-    quick_edit
+    quick_edit,
 )
 
 
@@ -50,14 +49,13 @@ async def main():
         print("📡 Creating Imagen AI client...")
         # For this example, we use a dev URL. Remove base_url for production.
         async with ImagenClient(API_KEY, base_url="https://api-beta.imagen-ai.com/v1") as client:
-
             # Step 2: Get available profiles
             print("\n📋 Fetching available profiles...")
             profiles = await client.get_profiles()
             if not profiles:
                 raise Exception("No profiles found for your account.")
 
-            chosen_profile = next((p for p in profiles if p.image_type == 'RAW'), None)
+            chosen_profile = next((p for p in profiles if p.image_type == "RAW"), None)
 
             print(f"\n✨ Using profile: '{chosen_profile.profile_name}' (Key: {chosen_profile.profile_key})")
 
@@ -71,12 +69,12 @@ async def main():
 
             def upload_progress(completed, total, _):
                 if total > 0:
-                    print(f"  📷 Progress: {completed}/{total}", end='\r')
+                    print(f"  📷 Progress: {completed}/{total}", end="\r")
 
             upload_summary = await client.upload_images(
                 project_uuid=project_uuid,
                 image_paths=IMAGE_PATHS,
-                progress_callback=upload_progress
+                progress_callback=upload_progress,
             )
             print()  # Newline after progress bar is done
 
@@ -93,14 +91,14 @@ async def main():
                 return
 
             # Step 5: Start editing
-            print(f"\n🎨 Starting editing...")
+            print("\n🎨 Starting editing...")
             # Use the EditOptions model to pass editing parameters
             editing_options = EditOptions(crop=True, straighten=True)
             await client.start_editing(
                 project_uuid=project_uuid,
                 profile_key=chosen_profile.profile_key,
                 photography_type=PhotographyType.WEDDING,
-                edit_options=editing_options
+                edit_options=editing_options,
             )
             print("✅ Editing finished.")
 
@@ -111,7 +109,7 @@ async def main():
 
             # Step 7: Optional Export
             export_choice = input("\n🤔 Would you like to export for delivery? (y/N): ").lower().strip()
-            if export_choice in ['y', 'yes']:
+            if export_choice in ["y", "yes"]:
                 print("\n📦 Starting export process...")
                 await client.export_project(project_uuid)
                 export_links = await client.get_export_links(project_uuid)
@@ -147,7 +145,7 @@ async def quick_demo():
             project_name="Quick Demo Project",
             photography_type=PhotographyType.PORTRAITS,
             export=True,
-            edit_options=demo_options
+            edit_options=demo_options,
         )
 
         print("🎉 Quick demo completed!")

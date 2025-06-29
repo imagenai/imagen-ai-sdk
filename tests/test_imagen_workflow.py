@@ -7,15 +7,24 @@ testing the interaction between multiple components.
 Run with: pytest test_imagen_workflow.py -v
 """
 
-import pytest
-from typing import List
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from imagen_sdk import (
-    ImagenClient, EditOptions, PhotographyType, CropAspectRatio,
-    UploadResult, UploadSummary, QuickEditResult, Profile,
-    quick_edit, get_profiles,
-    ImagenError, UploadError, ProjectError
+    CropAspectRatio,
+    EditOptions,
+    ImagenClient,
+    ImagenError,
+    PhotographyType,
+    Profile,
+    ProjectError,
+    QuickEditResult,
+    UploadError,
+    UploadResult,
+    UploadSummary,
+    get_profiles,
+    quick_edit,
 )
 
 
@@ -23,42 +32,34 @@ class WorkflowTestHelpers:
     """Helper class for workflow test data and mocks."""
 
     @staticmethod
-    def create_sample_profiles() -> List[Profile]:
+    def create_sample_profiles() -> list[Profile]:
         """Create sample profile data for testing."""
         return [
             Profile(
                 image_type="RAW",
                 profile_key=196,
                 profile_name="WARM SKIN TONES",
-                profile_type="Talent"
+                profile_type="Talent",
             ),
             Profile(
                 image_type="RAW",
                 profile_key=254,
                 profile_name="BODY LANGUAGE",
-                profile_type="Talent"
+                profile_type="Talent",
             ),
             Profile(
                 image_type="JPG",
                 profile_key=29132,
                 profile_name="MOMENTICOS",
-                profile_type="Talent"
-            )
+                profile_type="Talent",
+            ),
         ]
 
     @staticmethod
     def create_successful_upload_summary(file_count: int = 2) -> UploadSummary:
         """Create a successful upload summary for testing."""
-        results = [
-            UploadResult(file=f"image{i+1}.jpg", success=True, error=None)
-            for i in range(file_count)
-        ]
-        return UploadSummary(
-            total=file_count,
-            successful=file_count,
-            failed=0,
-            results=results
-        )
+        results = [UploadResult(file=f"image{i + 1}.jpg", success=True, error=None) for i in range(file_count)]
+        return UploadSummary(total=file_count, successful=file_count, failed=0, results=results)
 
     @staticmethod
     def create_partial_upload_summary() -> UploadSummary:
@@ -66,14 +67,9 @@ class WorkflowTestHelpers:
         results = [
             UploadResult(file="image1.jpg", success=True, error=None),
             UploadResult(file="image2.jpg", success=False, error="Network timeout"),
-            UploadResult(file="image3.jpg", success=True, error=None)
+            UploadResult(file="image3.jpg", success=True, error=None),
         ]
-        return UploadSummary(
-            total=3,
-            successful=2,
-            failed=1,
-            results=results
-        )
+        return UploadSummary(total=3, successful=2, failed=1, results=results)
 
     @staticmethod
     def create_mock_client_for_workflow():
@@ -111,8 +107,10 @@ def partial_upload_summary(helpers):
 @pytest.fixture
 def mock_client_factory(helpers):
     """Factory fixture for creating mock clients."""
+
     def _create_mock_client():
         return helpers.create_mock_client_for_workflow()
+
     return _create_mock_client
 
 
@@ -123,7 +121,7 @@ class TestConvenienceFunctions:
     async def test_get_profiles_function_success(self, sample_profiles, mock_client_factory):
         """Test the standalone get_profiles function."""
         # Mock the ImagenClient class in the imagen_sdk module where it's imported
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client_class.return_value = mock_client
@@ -144,7 +142,7 @@ class TestConvenienceFunctions:
         """Test get_profiles with custom base URL."""
         custom_url = "https://custom-api.example.com/v2"
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = []
             mock_client_class.return_value = mock_client
@@ -156,7 +154,7 @@ class TestConvenienceFunctions:
     @pytest.mark.asyncio
     async def test_get_profiles_function_error_handling(self, mock_client_factory):
         """Test get_profiles error propagation."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.side_effect = ImagenError("API Error")
             mock_client_class.return_value = mock_client
@@ -174,7 +172,7 @@ class TestQuickEditWorkflow:
         """Test the basic quick_edit workflow without export."""
         download_links = ["https://download1.com", "https://download2.com"]
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -187,7 +185,7 @@ class TestQuickEditWorkflow:
                 api_key="test-key",
                 profile_key=196,
                 image_paths=["img1.dng", "img2.dng"],
-                project_name="Test Project"
+                project_name="Test Project",
             )
 
             # Verify the result
@@ -215,10 +213,10 @@ class TestQuickEditWorkflow:
             straighten=True,
             hdr_merge=False,
             portrait_crop=True,
-            smooth_skin=True
+            smooth_skin=True,
         )
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -237,7 +235,7 @@ class TestQuickEditWorkflow:
                 photography_type=PhotographyType.WEDDING,
                 export=True,
                 edit_options=edit_options,
-                base_url="https://custom.api.com"
+                base_url="https://custom.api.com",
             )
 
             # Verify the result includes export links
@@ -248,7 +246,7 @@ class TestQuickEditWorkflow:
                 "test-project-uuid",
                 29132,
                 PhotographyType.WEDDING,
-                edit_options=edit_options
+                edit_options=edit_options,
             )
             mock_client.export_project.assert_called_once_with("test-project-uuid")
             mock_client.get_export_links.assert_called_once_with("test-project-uuid")
@@ -265,11 +263,11 @@ class TestQuickEditWorkflow:
             failed=2,
             results=[
                 UploadResult(file="img1.dng", success=False, error="File too large"),
-                UploadResult(file="img2.dng", success=False, error="Network error")
-            ]
+                UploadResult(file="img2.dng", success=False, error="Network error"),
+            ],
         )
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -280,7 +278,7 @@ class TestQuickEditWorkflow:
                 await quick_edit(
                     api_key="test-key",
                     profile_key=196,
-                    image_paths=["img1.dng", "img2.dng"]
+                    image_paths=["img1.dng", "img2.dng"],
                 )
 
             # Verify editing was not attempted
@@ -290,9 +288,12 @@ class TestQuickEditWorkflow:
     @pytest.mark.asyncio
     async def test_quick_edit_partial_upload_success(self, partial_upload_summary, mock_client_factory, sample_profiles):
         """Test quick_edit behavior with partial upload success."""
-        download_links = ["https://download1.com", "https://download3.com"]  # Only successful uploads
+        download_links = [
+            "https://download1.com",
+            "https://download3.com",
+        ]  # Only successful uploads
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -304,7 +305,7 @@ class TestQuickEditWorkflow:
             result = await quick_edit(
                 api_key="test-key",
                 profile_key=196,
-                image_paths=["img1.dng", "img2.dng", "img3.dng"]
+                image_paths=["img1.dng", "img2.dng", "img3.dng"],
             )
 
             # Should proceed with editing despite partial failure
@@ -319,7 +320,7 @@ class TestQuickEditWorkflow:
     @pytest.mark.asyncio
     async def test_quick_edit_file_profile_type_mismatch(self, mock_client_factory, sample_profiles):
         """Test quick_edit raises UploadError when file type does not match profile type (e.g., JPG file with RAW profile)."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client_class.return_value = mock_client
@@ -328,7 +329,7 @@ class TestQuickEditWorkflow:
                 await quick_edit(
                     api_key="test-key",
                     profile_key=196,  # RAW profile
-                    image_paths=["img1.jpg"]  # JPG file
+                    image_paths=["img1.jpg"],  # JPG file
                 )
 
 
@@ -343,20 +344,20 @@ class TestEditOptionsWorkflow:
             straighten=False,
             hdr_merge=True,
             portrait_crop=None,
-            smooth_skin=True
+            smooth_skin=True,
         )
 
         api_dict = options.to_api_dict()
 
         # Should exclude None values
         expected = {
-            'crop': True,
-            'straighten': False,
-            'hdr_merge': True,
-            'smooth_skin': True
+            "crop": True,
+            "straighten": False,
+            "hdr_merge": True,
+            "smooth_skin": True,
         }
         assert api_dict == expected
-        assert 'portrait_crop' not in api_dict
+        assert "portrait_crop" not in api_dict
 
     def test_edit_options_empty(self):
         """Test EditOptions with no values set."""
@@ -371,7 +372,7 @@ class TestEditOptionsWorkflow:
             straighten=None,
             hdr_merge=None,
             portrait_crop=None,
-            smooth_skin=None
+            smooth_skin=None,
         )
         api_dict = options.to_api_dict()
         assert api_dict == {}
@@ -380,26 +381,32 @@ class TestEditOptionsWorkflow:
 class TestEnumIntegration:
     """Test enum integration in workflows."""
 
-    @pytest.mark.parametrize("photo_type,expected_value", [
-        ("NO_TYPE", "NO_TYPE"),
-        ("PORTRAITS", "PORTRAITS"),
-        ("WEDDING", "WEDDING"),
-        ("REAL_ESTATE", "REAL_ESTATE"),
-        ("LANDSCAPE_NATURE", "LANDSCAPE_NATURE"),
-        ("EVENTS", "EVENTS"),
-        ("FAMILY_NEWBORN", "FAMILY_NEWBORN"),
-        ("BOUDOIR", "BOUDOIR"),
-        ("SPORTS", "SPORTS"),
-    ])
+    @pytest.mark.parametrize(
+        "photo_type,expected_value",
+        [
+            ("NO_TYPE", "NO_TYPE"),
+            ("PORTRAITS", "PORTRAITS"),
+            ("WEDDING", "WEDDING"),
+            ("REAL_ESTATE", "REAL_ESTATE"),
+            ("LANDSCAPE_NATURE", "LANDSCAPE_NATURE"),
+            ("EVENTS", "EVENTS"),
+            ("FAMILY_NEWBORN", "FAMILY_NEWBORN"),
+            ("BOUDOIR", "BOUDOIR"),
+            ("SPORTS", "SPORTS"),
+        ],
+    )
     def test_photography_type_values(self, photo_type, expected_value):
         """Test PhotographyType enum values are correct."""
         assert getattr(PhotographyType, photo_type).value == expected_value
 
-    @pytest.mark.parametrize("ratio_type,expected_value", [
-        ("RATIO_2X3", "2X3"),
-        ("RATIO_4X5", "4X5"),
-        ("RATIO_5X7", "5X7"),
-    ])
+    @pytest.mark.parametrize(
+        "ratio_type,expected_value",
+        [
+            ("RATIO_2X3", "2X3"),
+            ("RATIO_4X5", "4X5"),
+            ("RATIO_5X7", "5X7"),
+        ],
+    )
     def test_crop_aspect_ratio_values(self, ratio_type, expected_value):
         """Test CropAspectRatio enum values are correct."""
         assert getattr(CropAspectRatio, ratio_type).value == expected_value
@@ -411,18 +418,14 @@ class TestWorkflowErrorHandling:
     @pytest.mark.asyncio
     async def test_quick_edit_project_creation_failure(self, mock_client_factory, sample_profiles):
         """Test quick_edit when project creation fails."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.side_effect = ProjectError("Project creation failed")
             mock_client_class.return_value = mock_client
 
             with pytest.raises(ProjectError):
-                await quick_edit(
-                    api_key="test-key",
-                    profile_key=196,
-                    image_paths=["img1.dng"]
-                )
+                await quick_edit(api_key="test-key", profile_key=196, image_paths=["img1.dng"])
 
             # Verify subsequent steps were not called
             mock_client.upload_images.assert_not_called()
@@ -430,7 +433,7 @@ class TestWorkflowErrorHandling:
     @pytest.mark.asyncio
     async def test_quick_edit_upload_failure(self, mock_client_factory, sample_profiles):
         """Test quick_edit when upload fails completely."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -438,11 +441,7 @@ class TestWorkflowErrorHandling:
             mock_client_class.return_value = mock_client
 
             with pytest.raises(UploadError):
-                await quick_edit(
-                    api_key="test-key",
-                    profile_key=196,
-                    image_paths=["img1.dng"]
-                )
+                await quick_edit(api_key="test-key", profile_key=196, image_paths=["img1.dng"])
 
             # Verify editing was not attempted
             mock_client.start_editing.assert_not_called()
@@ -450,7 +449,7 @@ class TestWorkflowErrorHandling:
     @pytest.mark.asyncio
     async def test_quick_edit_editing_failure(self, successful_upload_summary, mock_client_factory, sample_profiles):
         """Test quick_edit when editing fails."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -459,11 +458,7 @@ class TestWorkflowErrorHandling:
             mock_client_class.return_value = mock_client
 
             with pytest.raises(ProjectError):
-                await quick_edit(
-                    api_key="test-key",
-                    profile_key=196,
-                    image_paths=["img1.dng"]
-                )
+                await quick_edit(api_key="test-key", profile_key=196, image_paths=["img1.dng"])
 
             # Verify download links were not requested
             mock_client.get_download_links.assert_not_called()
@@ -473,7 +468,7 @@ class TestWorkflowErrorHandling:
         """Test quick_edit when export fails but editing succeeds."""
         download_links = ["https://download1.com"]
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -488,7 +483,7 @@ class TestWorkflowErrorHandling:
                     api_key="test-key",
                     profile_key=196,  # Using RAW profile key from sample_profiles
                     image_paths=["img1.dng"],  # Using RAW file to match profile
-                    export=True  # This is the key - we need to set export=True to trigger the export failure
+                    export=True,  # This is the key - we need to set export=True to trigger the export failure
                 )
 
             # Verify the workflow calls up to the point of failure
@@ -501,6 +496,7 @@ class TestWorkflowErrorHandling:
             # Verify export links were not requested since export_project failed
             mock_client.get_export_links.assert_not_called()
 
+
 class TestWorkflowDataFlow:
     """Test data flow through complete workflows."""
 
@@ -508,11 +504,15 @@ class TestWorkflowDataFlow:
     @pytest.mark.integration
     async def test_complete_workflow_data_integrity(self, helpers, mock_client_factory, sample_profiles):
         """Test complete workflow data integrity."""
-        download_links = ["https://download1.com", "https://download2.com", "https://download3.com"]
+        download_links = [
+            "https://download1.com",
+            "https://download2.com",
+            "https://download3.com",
+        ]
         export_links = ["https://export1.com"]
         successful_upload_summary = helpers.create_successful_upload_summary(file_count=3)
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -526,10 +526,14 @@ class TestWorkflowDataFlow:
             result = await quick_edit(
                 api_key="integration-test-key",
                 profile_key=29132,  # JPG profile key from sample_profiles (was 196 - RAW profile)
-                image_paths=["photo1.jpg", "photo2.jpg", "photo3.jpg"],  # JPG files match JPG profile
+                image_paths=[
+                    "photo1.jpg",
+                    "photo2.jpg",
+                    "photo3.jpg",
+                ],  # JPG files match JPG profile
                 project_name="Integration Test Project",
                 photography_type=PhotographyType.FAMILY_NEWBORN,
-                export=True
+                export=True,
             )
 
             # Verify complete data flow
@@ -541,13 +545,12 @@ class TestWorkflowDataFlow:
 
             # Verify all calls were made with correct parameters
             mock_client.create_project.assert_called_once_with("Integration Test Project")
-            mock_client.upload_images.assert_called_once_with("test-project-uuid",
-                                                              ["photo1.jpg", "photo2.jpg", "photo3.jpg"])
+            mock_client.upload_images.assert_called_once_with("test-project-uuid", ["photo1.jpg", "photo2.jpg", "photo3.jpg"])
             mock_client.start_editing.assert_called_once_with(
                 "test-project-uuid",
                 29132,  # Updated to match JPG profile key
                 PhotographyType.FAMILY_NEWBORN,
-                edit_options=None
+                edit_options=None,
             )
             mock_client.get_download_links.assert_called_once_with("test-project-uuid")
             mock_client.export_project.assert_called_once_with("test-project-uuid")
@@ -558,7 +561,7 @@ class TestWorkflowDataFlow:
         """Test that all parameters are passed correctly through workflows."""
         successful_upload_summary = helpers.create_successful_upload_summary()
 
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -567,11 +570,7 @@ class TestWorkflowDataFlow:
             mock_client.get_download_links.return_value = ["https://download1.com"]
             mock_client_class.return_value = mock_client
 
-            await quick_edit(
-                api_key="test-key",
-                profile_key=196,
-                image_paths=["img1.dng"]
-            )
+            await quick_edit(api_key="test-key", profile_key=196, image_paths=["img1.dng"])
 
 
 # Test scenarios with multiple parameters
@@ -579,14 +578,24 @@ class TestQuickEditScenarios:
     """Test various quick_edit usage scenarios."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("photography_type,expected_calls", [
-        (PhotographyType.WEDDING, 1),
-        (PhotographyType.PORTRAITS, 1),
-        (None, 1),
-    ])
-    async def test_quick_edit_photography_types(self, photography_type, expected_calls, successful_upload_summary, mock_client_factory, sample_profiles):
+    @pytest.mark.parametrize(
+        "photography_type,expected_calls",
+        [
+            (PhotographyType.WEDDING, 1),
+            (PhotographyType.PORTRAITS, 1),
+            (None, 1),
+        ],
+    )
+    async def test_quick_edit_photography_types(
+        self,
+        photography_type,
+        expected_calls,
+        successful_upload_summary,
+        mock_client_factory,
+        sample_profiles,
+    ):
         """Test quick_edit with different photography types."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -599,7 +608,7 @@ class TestQuickEditScenarios:
                 api_key="test-key",
                 profile_key=196,
                 image_paths=["img1.dng"],
-                photography_type=photography_type
+                photography_type=photography_type,
             )
 
             assert mock_client.start_editing.call_count == expected_calls
@@ -608,13 +617,23 @@ class TestQuickEditScenarios:
             assert call_args[0][2] == photography_type  # Third argument is photography_type
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("export,expected_export_calls", [
-        (True, 1),
-        (False, 0),
-    ])
-    async def test_quick_edit_export_scenarios(self, export, expected_export_calls, successful_upload_summary, mock_client_factory, sample_profiles):
+    @pytest.mark.parametrize(
+        "export,expected_export_calls",
+        [
+            (True, 1),
+            (False, 0),
+        ],
+    )
+    async def test_quick_edit_export_scenarios(
+        self,
+        export,
+        expected_export_calls,
+        successful_upload_summary,
+        mock_client_factory,
+        sample_profiles,
+    ):
         """Test quick_edit with and without export."""
-        with patch('imagen_sdk.imagen_sdk.ImagenClient') as mock_client_class:
+        with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
             mock_client = mock_client_factory()
             mock_client.get_profiles.return_value = sample_profiles
             mock_client.create_project.return_value = "test-project-uuid"
@@ -629,7 +648,7 @@ class TestQuickEditScenarios:
                 api_key="test-key",
                 profile_key=196,
                 image_paths=["img1.dng"],
-                export=export
+                export=export,
             )
 
             assert mock_client.export_project.call_count == expected_export_calls
@@ -647,5 +666,5 @@ pytestmark = [
 ]
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

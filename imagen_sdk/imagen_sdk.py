@@ -9,36 +9,70 @@ import base64
 import hashlib
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union, Callable
-from urllib.parse import urlparse, unquote
+from typing import Any
+from urllib.parse import unquote, urlparse
 
 import aiofiles
 import httpx
 from pydantic import ValidationError
 
 from .enums import PhotographyType
-from .exceptions import ImagenError, AuthenticationError, ProjectError, UploadError, DownloadError
+from .exceptions import (
+    AuthenticationError,
+    DownloadError,
+    ImagenError,
+    ProjectError,
+    UploadError,
+)
 from .models import (
-    Profile, ProfileApiData, ProjectCreationResponse,
-    FileUploadInfo, PresignedUrlResponse, EditOptions, StatusDetails,
-    StatusResponse, DownloadLinksResponse, UploadResult, UploadSummary, QuickEditResult
+    DownloadLinksResponse,
+    EditOptions,
+    FileUploadInfo,
+    PresignedUrlResponse,
+    Profile,
+    ProfileApiData,
+    ProjectCreationResponse,
+    QuickEditResult,
+    StatusDetails,
+    StatusResponse,
+    UploadResult,
+    UploadSummary,
 )
 
 # Default logger for the SDK
 _default_logger = logging.getLogger("imagen_sdk.ImagenClient")
 
-RAW_EXTENSIONS = {".dng", ".nef", ".cr2", ".arw", ".nrw", ".crw", ".srf", ".sr2", ".orf", ".raw", ".rw2", ".raf",
-                  ".ptx",
-                  ".pef", ".rwl", ".srw", ".cr3", ".3fr", ".fff"}
+RAW_EXTENSIONS = {
+    ".dng",
+    ".nef",
+    ".cr2",
+    ".arw",
+    ".nrw",
+    ".crw",
+    ".srf",
+    ".sr2",
+    ".orf",
+    ".raw",
+    ".rw2",
+    ".raf",
+    ".ptx",
+    ".pef",
+    ".rwl",
+    ".srw",
+    ".cr3",
+    ".3fr",
+    ".fff",
+}
 JPG_EXTENSIONS = {".jpg", ".jpeg"}
 SUPPORTED_FILE_FORMATS = RAW_EXTENSIONS | JPG_EXTENSIONS
-
 
 
 # =============================================================================
 # IMAGEN CLIENT
 # =============================================================================
+
 
 class ImagenClient:
     """
@@ -75,10 +109,11 @@ class ImagenClient:
         base_url (str): Base URL for the Imagen AI API
         logger (logging.Logger): Logger instance for debugging and monitoring
     """
+
     _logger = _default_logger
 
     @classmethod
-    def set_logger(cls, logger: logging.Logger, level: Optional[int] = None):
+    def set_logger(cls, logger: logging.Logger, level: int | None = None):
         """
         Set a custom logger and optional logging level for all ImagenClient instances.
 
@@ -106,8 +141,13 @@ class ImagenClient:
         if level is not None:
             cls._logger.setLevel(level)
 
-    def __init__(self, api_key: str, base_url: str = "https://api-beta.imagen-ai.com/v1",
-                 logger: Optional[logging.Logger] = None, logger_level: Optional[int] = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api-beta.imagen-ai.com/v1",
+        logger: logging.Logger | None = None,
+        logger_level: int | None = None,
+    ):
         """
         Initialize the Imagen AI client.
 
@@ -135,8 +175,8 @@ class ImagenClient:
             raise ValueError("API key cannot be empty")
 
         self.api_key = api_key.strip()
-        self.base_url = base_url.rstrip('/')
-        self._session: Optional[httpx.AsyncClient] = None
+        self.base_url = base_url.rstrip("/")
+        self._session: httpx.AsyncClient | None = None
         if logger is not None:
             self._logger = logger
             if logger_level is not None:
@@ -157,10 +197,10 @@ class ImagenClient:
         if self._session is None:
             self._session = httpx.AsyncClient(
                 headers={
-                    'x-api-key': self.api_key,
-                    'User-Agent': 'Imagen-Python-SDK/1.0.0'
+                    "x-api-key": self.api_key,
+                    "User-Agent": "Imagen-Python-SDK/1.0.0",
                 },
-                timeout=httpx.Timeout(300.0)
+                timeout=httpx.Timeout(300.0),
             )
             self._logger.debug("Created new HTTP session")
         return self._session
@@ -194,7 +234,7 @@ class ImagenClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+    async def _make_request(self, method: str, endpoint: str, **kwargs) -> dict[str, Any]:
         """
         Make an HTTP request to the API with proper error handling.
 
@@ -229,7 +269,7 @@ class ImagenClient:
                 try:
                     # Try to parse a detailed error message from the JSON response
                     error_data = response.json()
-                    message = error_data.get('detail', response.text)
+                    message = error_data.get("detail", response.text)
                 except Exception:
                     # Fallback to the raw response text if JSON parsing fails
                     message = response.text
@@ -247,7 +287,7 @@ class ImagenClient:
             self._logger.error(f"Request failed: {e}")
             raise ImagenError(f"Request failed: {e}")
 
-    async def create_project(self, name: Optional[str] = None) -> str:
+    async def create_project(self, name: str | None = None) -> str:
         """
         Create a new project in the Imagen AI platform.
 
@@ -283,10 +323,10 @@ class ImagenClient:
         """
         data = {}
         if name:
-            data['name'] = name
+            data["name"] = name
 
         self._logger.info(f"Creating project: {name or 'Unnamed'}")
-        response_json = await self._make_request('POST', '/projects/', json=data)
+        response_json = await self._make_request("POST", "/projects/", json=data)
 
         try:
             # Validate the response and extract the UUID
@@ -298,9 +338,14 @@ class ImagenClient:
             self._logger.error(f"Failed to parse project creation response: {e}")
             raise ProjectError(f"Could not parse project creation response: {e}")
 
-    async def upload_images(self, project_uuid: str, image_paths: List[Union[str, Path]],
-                            max_concurrent: int = 5, calculate_md5: bool = False,
-                            progress_callback: Optional[Callable[[int, int, str], None]] = None) -> UploadSummary:
+    async def upload_images(
+        self,
+        project_uuid: str,
+        image_paths: list[str | Path],
+        max_concurrent: int = 5,
+        calculate_md5: bool = False,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> UploadSummary:
         """
         Upload images to a project with concurrent processing and progress tracking.
 
@@ -361,8 +406,8 @@ class ImagenClient:
 
         self._logger.info(f"Starting upload of {len(image_paths)} images to project {project_uuid}")
 
-        files_to_upload: List[FileUploadInfo] = []
-        valid_paths: List[Path] = []
+        files_to_upload: list[FileUploadInfo] = []
+        valid_paths: list[Path] = []
 
         for path_str in image_paths:
             path = Path(path_str)
@@ -378,8 +423,11 @@ class ImagenClient:
 
         # Get presigned URLs from the API
         upload_payload = {"files_list": [f.model_dump(exclude_none=True) for f in files_to_upload]}
-        response_json = await self._make_request('POST', f'/projects/{project_uuid}/get_temporary_upload_links',
-                                                 json=upload_payload)
+        response_json = await self._make_request(
+            "POST",
+            f"/projects/{project_uuid}/get_temporary_upload_links",
+            json=upload_payload,
+        )
 
         try:
             upload_links_response = PresignedUrlResponse.model_validate(response_json)
@@ -419,21 +467,25 @@ class ImagenClient:
                 return await upload_single_file(file_path, index)
 
         tasks = [bounded_upload(path, i) for i, path in enumerate(valid_paths)]
-        results: List[UploadResult] = await asyncio.gather(*tasks)
+        results: list[UploadResult] = await asyncio.gather(*tasks)
 
         summary = UploadSummary(
             total=len(valid_paths),
             successful=sum(1 for r in results if r.success),
             failed=sum(1 for r in results if not r.success),
-            results=results
+            results=results,
         )
 
         self._logger.info(f"Upload completed: {summary.successful}/{summary.total} successful")
         return summary
 
-    async def start_editing(self, project_uuid: str, profile_key: int,
-                            photography_type: Optional[PhotographyType] = None,
-                            edit_options: Optional[EditOptions] = None) -> StatusDetails:
+    async def start_editing(
+        self,
+        project_uuid: str,
+        profile_key: int,
+        photography_type: PhotographyType | None = None,
+        edit_options: EditOptions | None = None,
+    ) -> StatusDetails:
         """
         Start AI-powered editing of images in a project and wait for completion.
 
@@ -499,9 +551,9 @@ class ImagenClient:
             - Profile keys are obtained from training in the Imagen AI app
             - The AI generates XMP files compatible with Lightroom/Photoshop
         """
-        edit_data: Dict[str, Any] = {'profile_key': int(profile_key)}
+        edit_data: dict[str, Any] = {"profile_key": int(profile_key)}
         if photography_type:
-            edit_data['photography_type'] = photography_type.value
+            edit_data["photography_type"] = photography_type.value
         if edit_options:
             edit_data.update(edit_options.to_api_dict())
 
@@ -510,10 +562,15 @@ class ImagenClient:
         # but does not expect a 'Content-Type' header for the JSON payload, which
         # is non-standard. httpx automatically adds this header, so we explicitly
         # override it to be empty to comply with the API's specific requirement.
-        await self._make_request('POST', f'/projects/{project_uuid}/edit', json=edit_data, headers={'Content-Type': ''})
-        return await self._wait_for_completion(project_uuid, 'edit')
+        await self._make_request(
+            "POST",
+            f"/projects/{project_uuid}/edit",
+            json=edit_data,
+            headers={"Content-Type": ""},
+        )
+        return await self._wait_for_completion(project_uuid, "edit")
 
-    async def get_download_links(self, project_uuid: str) -> List[str]:
+    async def get_download_links(self, project_uuid: str) -> list[str]:
         """
         Get download links for edited images (XMP files).
 
@@ -549,7 +606,7 @@ class ImagenClient:
             - The original image files are not modified; XMP files contain edit instructions
         """
         self._logger.debug(f"Getting download links for project {project_uuid}")
-        response_json = await self._make_request('GET', f'/projects/{project_uuid}/edit/get_temporary_download_links')
+        response_json = await self._make_request("GET", f"/projects/{project_uuid}/edit/get_temporary_download_links")
         try:
             # Validate the full response structure
             links_response = DownloadLinksResponse.model_validate(response_json)
@@ -602,10 +659,10 @@ class ImagenClient:
             - Use get_export_links() after this completes to download JPEG files
         """
         self._logger.info(f"Starting export for project {project_uuid}")
-        await self._make_request('POST', f'/projects/{project_uuid}/export')
-        return await self._wait_for_completion(project_uuid, 'export')
+        await self._make_request("POST", f"/projects/{project_uuid}/export")
+        return await self._wait_for_completion(project_uuid, "export")
 
-    async def get_export_links(self, project_uuid: str) -> List[str]:
+    async def get_export_links(self, project_uuid: str) -> list[str]:
         """
         Get download links for exported JPEG images.
 
@@ -641,7 +698,7 @@ class ImagenClient:
             - These files have all AI edits applied and are ready for delivery
         """
         self._logger.debug(f"Getting export links for project {project_uuid}")
-        response_json = await self._make_request('GET', f'/projects/{project_uuid}/export/get_temporary_download_links')
+        response_json = await self._make_request("GET", f"/projects/{project_uuid}/export/get_temporary_download_links")
         try:
             # Validate the full response structure
             links_response = DownloadLinksResponse.model_validate(response_json)
@@ -652,9 +709,13 @@ class ImagenClient:
         except ValidationError as e:
             raise ProjectError(f"Could not parse export links response: {e}")
 
-    async def download_files(self, download_links: List[str], output_dir: Union[str, Path] = "downloads",
-                             max_concurrent: int = 5,
-                             progress_callback: Optional[Callable[[int, int, str], None]] = None) -> List[str]:
+    async def download_files(
+        self,
+        download_links: list[str],
+        output_dir: str | Path = "downloads",
+        max_concurrent: int = 5,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> list[str]:
         """
         Download files from provided URLs with concurrent processing and progress tracking.
 
@@ -724,7 +785,7 @@ class ImagenClient:
         self._logger.info(f"Starting download of {len(download_links)} files to {output_path}")
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def download_single_file(url: str, index: int) -> Optional[str]:
+        async def download_single_file(url: str, index: int) -> str | None:
             """Download a single file and return the local path."""
             async with semaphore:
                 if progress_callback:
@@ -740,7 +801,7 @@ class ImagenClient:
                         response.raise_for_status()
 
                         # Write file to disk
-                        async with aiofiles.open(local_path, 'wb') as f:
+                        async with aiofiles.open(local_path, "wb") as f:
                             await f.write(response.content)
 
                     if progress_callback:
@@ -752,7 +813,11 @@ class ImagenClient:
                 except Exception as e:
                     self._logger.error(f"Failed to download file {index + 1}: {e}")
                     if progress_callback:
-                        progress_callback(index + 1, len(download_links), f"Failed to download file {index + 1}: {e}")
+                        progress_callback(
+                            index + 1,
+                            len(download_links),
+                            f"Failed to download file {index + 1}: {e}",
+                        )
                     return None
 
         # Create download tasks
@@ -789,7 +854,7 @@ class ImagenClient:
             filename = Path(path).name
 
             # If we got a valid filename with extension, use it
-            if filename and '.' in filename and len(filename) > 1:
+            if filename and "." in filename and len(filename) > 1:
                 return filename
 
         except Exception as e:
@@ -798,7 +863,7 @@ class ImagenClient:
         # Fallback to generated filename
         return f"imagen_edited_{index + 1:05d}.jpg"
 
-    async def get_profiles(self) -> List[Profile]:
+    async def get_profiles(self) -> list[Profile]:
         """
         Get available editing profiles from your Imagen AI account.
 
@@ -838,7 +903,7 @@ class ImagenClient:
             - Profile names and types help you identify the right style for your project
         """
         self._logger.debug("Getting available profiles")
-        response_json = await self._make_request('GET', '/profiles')
+        response_json = await self._make_request("GET", "/profiles")
         try:
             # Validate the full response structure
             api_data = ProfileApiData.model_validate(response_json)
@@ -860,10 +925,10 @@ class ImagenClient:
         Returns:
             Base64-encoded MD5 hash string
         """
-        async with aiofiles.open(file_path, 'rb') as file:
+        async with aiofiles.open(file_path, "rb") as file:
             data = await file.read()
         md5_digest = hashlib.md5(data).digest()
-        base64_encoded_md5 = base64.b64encode(md5_digest).decode('utf-8')
+        base64_encoded_md5 = base64.b64encode(md5_digest).decode("utf-8")
         return base64_encoded_md5
 
     @staticmethod
@@ -879,7 +944,7 @@ class ImagenClient:
             UploadError: If upload fails
         """
         try:
-            async with aiofiles.open(file_path, 'rb') as f:
+            async with aiofiles.open(file_path, "rb") as f:
                 content = await f.read()
 
             async with httpx.AsyncClient(timeout=300.0) as client:
@@ -915,8 +980,8 @@ class ImagenClient:
             if elapsed > max_wait_time:
                 raise ProjectError(f"{operation.title()} timed out after {max_wait_time} seconds")
 
-            endpoint = f'/projects/{project_uuid}/{operation}/status'
-            status_json = await self._make_request('GET', endpoint)
+            endpoint = f"/projects/{project_uuid}/{operation}/status"
+            status_json = await self._make_request("GET", endpoint)
 
             try:
                 # Validate the full response, including the 'data' wrapper
@@ -932,11 +997,11 @@ class ImagenClient:
             progress_str = f" ({status_details.progress:.1f}%)" if status_details.progress is not None else ""
             self._logger.info(f"  - Status: {status_details.status}{progress_str} (elapsed: {elapsed_int}s)")
 
-            if status_details.status == 'Completed':
+            if status_details.status == "Completed":
                 self._logger.info(f"✅ {operation.title()} completed successfully!")
                 return status_details  # Return the inner details object
 
-            if status_details.status == 'Failed':
+            if status_details.status == "Failed":
                 error_msg = f"{operation.title()} failed."
                 if status_details.details:
                     error_msg += f" Details: {status_details.details}"
@@ -960,7 +1025,8 @@ class ImagenClient:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai.com/v1") -> List[Profile]:
+
+async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai.com/v1") -> list[Profile]:
     """
     Get available editing profiles using a standalone function.
 
@@ -992,7 +1058,7 @@ async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai
         return await client.get_profiles()
 
 
-def check_files_match_profile_type(image_paths: List[Union[str, Path]], profile: Profile, logger: logging.Logger):
+def check_files_match_profile_type(image_paths: list[str | Path], profile: Profile, logger: logging.Logger):
     """
     Validate that all files match the profile's image_type (RAW or JPG).
 
@@ -1030,10 +1096,8 @@ def check_files_match_profile_type(image_paths: List[Union[str, Path]], profile:
         - This check should be done before calling upload_images()
     """
     if profile.image_type.upper() == "RAW":
-        allowed_exts = RAW_EXTENSIONS
         type_label = "RAW"
     elif profile.image_type.upper() == "JPG":
-        allowed_exts = JPG_EXTENSIONS
         type_label = "JPG"
     else:
         raise UploadError(f"Profile type '{profile.image_type}' is not supported for file validation.")
@@ -1067,14 +1131,21 @@ def check_files_match_profile_type(image_paths: List[Union[str, Path]], profile:
             raise UploadError(f"JPG profile cannot be used with unsupported files: {invalid_files}")
 
 
-async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str, Path]],
-                     project_name: Optional[str] = None, photography_type: Optional[PhotographyType] = None,
-                     export: bool = False, edit_options: Optional[EditOptions] = None,
-                     download: bool = False, download_dir: Union[str, Path] = "downloads",
-                     export_download_dir: Optional[Union[str, Path]] = None,
-                     base_url: str = "https://api-beta.imagen-ai.com/v1",
-                     logger: Optional[logging.Logger] = None,
-                     logger_level: Optional[int] = None) -> QuickEditResult:
+async def quick_edit(
+    api_key: str,
+    profile_key: int,
+    image_paths: list[str | Path],
+    project_name: str | None = None,
+    photography_type: PhotographyType | None = None,
+    export: bool = False,
+    edit_options: EditOptions | None = None,
+    download: bool = False,
+    download_dir: str | Path = "downloads",
+    export_download_dir: str | Path | None = None,
+    base_url: str = "https://api-beta.imagen-ai.com/v1",
+    logger: logging.Logger | None = None,
+    logger_level: int | None = None,
+) -> QuickEditResult:
     """
     Complete one-line workflow: create project, upload, edit, and optionally export and download.
 
@@ -1195,7 +1266,7 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
             download_links=download_links,
             export_links=export_links,
             downloaded_files=downloaded_files,
-            exported_files=exported_files
+            exported_files=exported_files,
         )
 
         _logger.info(f"Quick edit workflow completed successfully for project {project_uuid}")

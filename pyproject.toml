@@ -38,14 +38,18 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.10.0",
     "black>=21.0",
-    "flake8>=3.8",
     "mypy>=0.800",
+    "pre-commit>=3.0",
+    "ruff>=0.4.8",
 ]
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.10.0",
+    "black>=21.0",
+    "flake8>=3.8",
+    "mypy>=0.800",
 ]
 
 [project.urls]
@@ -86,3 +90,12 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 140
+fix = true
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
