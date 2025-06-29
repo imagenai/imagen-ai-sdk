@@ -1229,7 +1229,7 @@ class TestEdgeCases:
         never_complete_response = {"data": {"status": "Processing", "progress": 50.0}}
 
         with patch.object(client, '_make_request', return_value=never_complete_response):
-            with patch('time.time', side_effect=[0, 3700]):  # Simulate time passing beyond timeout
+            with patch('time.time', side_effect=[0, 73000]):  # Simulate time passing beyond timeout
                 with patch('builtins.print'):  # Suppress print output
 
                     with pytest.raises(ProjectError, match="timed out after"):
