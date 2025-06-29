@@ -58,45 +58,15 @@ One-Line Usage:
     print(f"Exported files: {result.exported_files}")
 """
 
-from .imagen_sdk import (
-    # Main client
-    ImagenClient,
-
-    # Pydantic Models for data structures
-    Profile,
-    ProfileApiResponse,
-    ProfileApiData,
-    ProjectCreationResponseData,
-    ProjectCreationResponse,
-    FileUploadInfo,
-    PresignedUrl,
-    PresignedUrlList,
-    PresignedUrlResponse,
-    EditOptions,
-    StatusDetails,
-    StatusResponse,
-    DownloadLink,
-    DownloadLinksList,
-    DownloadLinksResponse,
-    UploadResult,
-    UploadSummary,
-    QuickEditResult,
-
-    # Exceptions
-    ImagenError,
-    AuthenticationError,
-    ProjectError,
-    UploadError,
-    DownloadError,  # Added this missing export
-
-    # Enums for editing options
-    PhotographyType,
-    CropAspectRatio,
-
-    # Convenience functions
-    quick_edit,
-    get_profiles,
+from .imagen_sdk import ImagenClient, quick_edit, get_profiles, check_files_match_profile_type, get_profile, \
+    RAW_EXTENSIONS, JPG_EXTENSIONS, SUPPORTED_FILE_FORMATS
+from .models import (
+    Profile, ProfileApiResponse, ProfileApiData, ProjectCreationResponseData, ProjectCreationResponse,
+    FileUploadInfo, PresignedUrl, PresignedUrlList, PresignedUrlResponse, EditOptions, StatusDetails,
+    StatusResponse, DownloadLink, DownloadLinksList, DownloadLinksResponse, UploadResult, UploadSummary, QuickEditResult
 )
+from .exceptions import ImagenError, AuthenticationError, ProjectError, UploadError, DownloadError
+from .enums import PhotographyType, CropAspectRatio
 
 # Version info
 __version__ = "1.0.0"
@@ -107,18 +77,13 @@ __url__ = "https://github.com/imagenai/imagen-ai-sdk"
 
 # Main exports for public API
 __all__ = [
-    # Main class
     'ImagenClient',
-
-    # Core Pydantic Models (commonly used)
     'Profile',
     'EditOptions',
     'UploadResult',
     'UploadSummary',
     'QuickEditResult',
     'StatusDetails',
-
-    # Response Models (for advanced usage)
     'ProfileApiResponse',
     'ProfileApiData',
     'ProjectCreationResponseData',
@@ -131,22 +96,19 @@ __all__ = [
     'DownloadLink',
     'DownloadLinksList',
     'DownloadLinksResponse',
-
-    # Exceptions
     'ImagenError',
     'AuthenticationError',
     'ProjectError',
     'UploadError',
     'DownloadError',
-
-    # Enums
     'PhotographyType',
     'CropAspectRatio',
-
-    # Functions
     'quick_edit',
     'get_profiles',
-
-    # Metadata
+    'get_profile',
+    'check_files_match_profile_type',
+    'RAW_EXTENSIONS',
+    'JPG_EXTENSIONS',
+    'SUPPORTED_FILE_FORMATS',
     '__version__',
 ]
