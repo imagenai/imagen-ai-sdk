@@ -790,7 +790,7 @@ class TestImagenClientFileOperations:
     @pytest.mark.asyncio
     async def test_calculate_md5(self, mock_helpers):
         test_content = b"test file content for md5"
-        expected_md5 = hashlib.md5(test_content).hexdigest()
+        expected_md5 = "CldbCd+F12oPFPJyZ2uDrw=="
 
         mock_file = mock_helpers.create_async_file_mock(test_content)
 

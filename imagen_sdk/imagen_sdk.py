@@ -1,10 +1,11 @@
 """
-Imagen AI Python SDK (Pydantic Edition)
+Imagen AI Python SDK
 
 A streamlined, robust SDK for the Imagen AI API workflow.
 """
 
 import asyncio
+import base64
 import hashlib
 import logging
 import time
@@ -27,7 +28,8 @@ from .models import (
 # Default logger for the SDK
 _default_logger = logging.getLogger("imagen_sdk.ImagenClient")
 
-RAW_EXTENSIONS = {".dng",".nef", ".cr2", ".arw", ".nrw", ".crw", ".srf", ".sr2", ".orf", ".raw", ".rw2", ".raf", ".ptx",
+RAW_EXTENSIONS = {".dng", ".nef", ".cr2", ".arw", ".nrw", ".crw", ".srf", ".sr2", ".orf", ".raw", ".rw2", ".raf",
+                  ".ptx",
                   ".pef", ".rwl", ".srw", ".cr3", ".3fr", ".fff"}
 JPG_EXTENSIONS = {".jpg", ".jpeg"}
 SUPPORTED_FILE_FORMATS = RAW_EXTENSIONS | JPG_EXTENSIONS
@@ -503,6 +505,10 @@ class ImagenClient:
             edit_data.update(edit_options.to_api_dict())
 
         self._logger.info(f"Starting editing for project {project_uuid} with profile {profile_key}")
+        # The Imagen AI API endpoint for starting an edit requires a POST request
+        # but does not expect a 'Content-Type' header for the JSON payload, which
+        # is non-standard. httpx automatically adds this header, so we explicitly
+        # override it to be empty to comply with the API's specific requirement.
         await self._make_request('POST', f'/projects/{project_uuid}/edit', json=edit_data, headers={'Content-Type': ''})
         return await self._wait_for_completion(project_uuid, 'edit')
 
@@ -851,16 +857,13 @@ class ImagenClient:
             file_path: Path to the file
 
         Returns:
-            MD5 hash as hex string
+            Base64-encoded MD5 hash string
         """
-        hash_md5 = hashlib.md5()
-        async with aiofiles.open(file_path, 'rb') as f:
-            while True:
-                chunk = await f.read(8192)  # Read in 8KB chunks
-                if not chunk:
-                    break
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+        async with aiofiles.open(file_path, 'rb') as file:
+            data = await file.read()
+        md5_digest = hashlib.md5(data).digest()
+        base64_encoded_md5 = base64.b64encode(md5_digest).decode('utf-8')
+        return base64_encoded_md5
 
     @staticmethod
     async def _upload_to_s3(file_path: Path, upload_url: str):
@@ -900,7 +903,7 @@ class ImagenClient:
         """
         check_interval, max_interval = 10.0, 60.0
         start_time = time.time()
-        max_wait_time = 3600  # 1 hour max wait time
+        max_wait_time = 72000  # 20 hours max wait time
 
         self._logger.info(f"⏳ Waiting for {operation} to complete... (will check status periodically)")
 
@@ -1067,6 +1070,7 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
                      project_name: Optional[str] = None, photography_type: Optional[PhotographyType] = None,
                      export: bool = False, edit_options: Optional[EditOptions] = None,
                      download: bool = False, download_dir: Union[str, Path] = "downloads",
+                     export_download_dir: Optional[Union[str, Path]] = None,
                      base_url: str = "https://api-beta.imagen-ai.com/v1",
                      logger: Optional[logging.Logger] = None,
                      logger_level: Optional[int] = None) -> QuickEditResult:
@@ -1090,6 +1094,8 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
         edit_options (Optional[EditOptions]): Optional editing parameters for customization
         download (bool): Whether to automatically download edited files (default: False)
         download_dir (Union[str, Path]): Directory to save downloaded files (default: "downloads")
+        export_download_dir (Optional[Union[str, Path]]): Directory for exported files.
+                                                         Defaults to a subdirectory inside 'download_dir'.
         base_url (str): API base URL (default: production URL)
         logger (Optional[logging.Logger]): Optional custom logger for workflow logging
         logger_level (Optional[int]): Optional logging level
@@ -1114,48 +1120,25 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
         ```python
         from imagen_sdk import quick_edit, EditOptions, PhotographyType
 
-        # Simple editing (XMP files only)
-        result = await quick_edit(
-            api_key="your_api_key",
-            profile_key=5700,
-            image_paths=["wedding1.cr2", "wedding2.nef", "wedding3.dng"]
-        )
-        print(f"Project UUID: {result.project_uuid}")
-        print(f"Download links: {len(result.download_links)} XMP files ready")
-
-        # Advanced workflow with all options
-        edit_options = EditOptions(
-            crop=True,
-            straighten=True,
-            portrait_crop=True,
-            smooth_skin=True
-        )
-
+        # Advanced workflow with custom export directory
         result = await quick_edit(
             api_key="your_api_key",
             profile_key=5700,
             image_paths=["photo1.cr2", "photo2.nef"],
-            project_name="Wedding_Photos_2024_01_15",
-            photography_type=PhotographyType.WEDDING,
-            edit_options=edit_options,
-            export=True,  # Also generate JPEG files
-            download=True,  # Automatically download all files
-            download_dir="wedding_delivery"
+            export=True,
+            download=True,
+            download_dir="wedding_delivery",
+            export_download_dir="wedding_delivery/final_jpegs"
         )
-
-        print(f"Downloaded {len(result.downloaded_files)} XMP files")
-        print(f"Downloaded {len(result.exported_files)} JPEG files")
         ```
 
     Note:
         - All files must be the same type (all RAW or all JPEG)
         - Project names must be unique across your account
         - Setting download=True automatically downloads both XMP and JPEG files (if export=True)
-        - XMP files contain Lightroom-compatible edit instructions
-        - JPEG files are final, client-ready images (when export=True)
         - This function handles all error cases and provides detailed error messages
     """
-    _logger = logger if logger is not None else ImagenClient.logger
+    _logger = logger if logger is not None else _default_logger
     if logger_level is not None:
         _logger.setLevel(logger_level)
     _logger.info(f"Starting quick_edit workflow with {len(image_paths)} images")
@@ -1197,8 +1180,9 @@ async def quick_edit(api_key: str, profile_key: int, image_paths: List[Union[str
             try:
                 downloaded_files = await client.download_files(download_links, download_dir)
                 if export_links:
-                    export_download_dir = Path(download_dir) / "exported"
-                    exported_files = await client.download_files(export_links, export_download_dir)
+                    # Use the configurable export directory, or default to a sub-directory
+                    final_export_dir = export_download_dir or (Path(download_dir) / "exported")
+                    exported_files = await client.download_files(export_links, final_export_dir)
             except Exception as e:
                 # Re-raise any download-related errors (DownloadError, etc.)
                 _logger.error(f"Download failed: {e}")
@@ -1263,4 +1247,4 @@ async def get_profile(api_key: str, profile_key: int, base_url: str = "https://a
 if __name__ == "__main__":
     # This file is intended to be used as a library.
     # See the 'examples.py' file for usage demonstrations.
-    ImagenClient.logger.info("Imagen AI SDK loaded. See examples.py for usage.")
+    _default_logger.info("Imagen AI SDK loaded. See examples.py for usage.")
