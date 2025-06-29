@@ -6,7 +6,7 @@ Transform your post-production workflow with AI-powered batch editing. Upload hu
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick start
 
 ### 1. Install
 ```bash
@@ -15,13 +15,13 @@ pip install imagen-ai-sdk
 
 ### 2. Get API Key
 1. Sign up at [imagen-ai.com](https://imagen-ai.com)
-2. Contact support to request your API key
-3. Set it as an environment variable:
+2. Contact support to request your API key.
+3. Set the API key as an environment variable:
 ```bash
 export IMAGEN_API_KEY="your_api_key_here"
 ```
 
-### 3. Edit Photos (One Line!)
+### 3. Edit photos in one line!
 ```python
 import asyncio
 from imagen_sdk import quick_edit, EditOptions
@@ -47,7 +47,7 @@ asyncio.run(main())
 
 ---
 
-## 🎯 Why Use This SDK?
+## 🎯 Why use this SDK?
 
 | **Before** | **After**                                  |
 |------------|--------------------------------------------|
@@ -56,22 +56,22 @@ asyncio.run(main())
 | Inconsistent editing style | Professional AI consistency                |
 | Manual file management | Automatic downloads                        |
 
-> **💡 Pro Tip**: Start by using the Imagen AI app to perfect your editing style, then use the API to automate that exact workflow at scale.
+> **💡 Pro tip**: First, use the Imagen app to perfect your editing style, and then use the API to automate that exact workflow at scale.
 
 ---
 
-## 📸 Supported File Formats
+## 📸 Supported file formats
 
-Imagen AI supports a wide range of photography file formats. The SDK includes built-in constants for validation:
+Imagen supports a wide range of photography file formats. The SDK includes built-in constants for validation:
 
-### **RAW Extensions** (RAW_EXTENSIONS)
+### **RAW extensions** (RAW_EXTENSIONS)
 `.dng`, `.nef`, `.cr2`, `.arw`, `.nrw`, `.crw`, `.srf`, `.sr2`, `.orf`, `.raw`, `.rw2`, `.raf`, `.ptx`, `.pef`, `.rwl`, `.srw`, `.cr3`, `.3fr`, `.fff`
 
-### **JPEG Extensions** (JPG_EXTENSIONS)
+### **JPEG extensions** (JPG_EXTENSIONS)
 `.jpg`, `.jpeg`
 
-### **Complete List** (SUPPORTED_FILE_FORMATS)
-All RAW and JPEG formats combined - use this constant for validation in your code.
+### **Complete list** (SUPPORTED_FILE_FORMATS)
+All RAW and JPEG formats combined. Use this constant to validate your code.
 
 ```python
 from imagen_sdk import SUPPORTED_FILE_FORMATS, RAW_EXTENSIONS, JPG_EXTENSIONS
@@ -83,26 +83,26 @@ is_raw = file_ext in RAW_EXTENSIONS
 is_jpeg = file_ext in JPG_EXTENSIONS
 ```
 
-> **🚨 Important**: A single project can contain **either** RAW files **or** JPEG/standard files, but **not both**. Mix different file types in separate projects.
+> **🚨 Important**: A single project can contain **either** RAW files **or** JPEG/standard files, but **not both**. Each file type must be in a separate project.
 
 ---
 
 ## 🔄 Understanding the Workflow
 
-### **What You Get Back**
-The SDK returns **Lightroom-compatible edit instructions** (XMP files) that preserve your original files and allow for non-destructive editing. You can:
-- Open the edited files directly in Lightroom
-- Further adjust the AI-generated edits
-- Export to any format you need
+### **What you get back**
+The SDK returns **Adobe-compatible edit instructions** (XMP files) that preserve your original files and allow for non-destructive editing. You can:
+- Open the edited files directly in Lightroom Classic, Lightroom, Photoshop, or Bridge.
+- Further adjust the AI-generated edits.
+- Export to any format you need.
 
-### **Profile Keys: Your Editing Style**
+### **Profile keys: Your editing style**
 Profile keys represent your unique editing style learned by the AI:
-1. **Start with the Imagen AI app** to train your personal editing profile
-2. **Perfect your style** with 3,000+ edited photos in the app
-3. **Get your profile key** and use it in the API for consistent automation
-4. **Scale your workflow** - apply your exact editing style to thousands of photos
+1. **Start with the Imagen app** to train your Personal AI Profile.
+2. **Perfect your style** with 3,000+ edited photos in the app.
+3. **Get your profile key** and use it in the API for consistent automation.
+4. **Scale your workflow** and apply your exact editing style to thousands of photos.
 
-### **Export Options**
+### **Export options**
 You can also export final JPEG files directly:
 ```python
 result = await quick_edit(
@@ -119,7 +119,7 @@ result = await quick_edit(
 
 ## 📚 API Reference
 
-### **Main Client (`ImagenClient`)**
+### **Main client (`ImagenClient`)**
 
 ```python
 from imagen_sdk import ImagenClient
@@ -130,17 +130,17 @@ async with ImagenClient("your_api_key") as client:
     pass  # Session automatically closed
 ```
 
-#### **Key Methods:**
-- `create_project(name=None)` - Create a new project
-- `upload_images(project_uuid, image_paths, max_concurrent=5, calculate_md5=False, progress_callback=None)` - Upload files with progress tracking
-- `start_editing(project_uuid, profile_key, photography_type=None, edit_options=None)` - Start AI editing
-- `get_download_links(project_uuid)` - Get XMP download URLs
-- `export_project(project_uuid)` - Export to JPEG
-- `get_export_links(project_uuid)` - Get JPEG download URLs
-- `download_files(download_links, output_dir="downloads", max_concurrent=5, progress_callback=None)` - Download files
-- `get_profiles()` - List available editing profiles
+#### **Key methods**
+- `create_project(name=None)` - Create a new project.
+- `upload_images(project_uuid, image_paths, max_concurrent=5, calculate_md5=False, progress_callback=None)` - Upload files with progress tracking.
+- `start_editing(project_uuid, profile_key, photography_type=None, edit_options=None)` - Start AI editing.
+- `get_download_links(project_uuid)` - Get XMP download URLs.
+- `export_project(project_uuid)` - Export to JPEG.
+- `get_export_links(project_uuid)` - Get JPEG download URLs.
+- `download_files(download_links, output_dir="downloads", max_concurrent=5, progress_callback=None)` - Download files.
+- `get_profiles()` - List available editing profiles.
 
-### **Convenience Functions**
+### **Popular functions**
 
 ```python
 from imagen_sdk import get_profiles, get_profile, check_files_match_profile_type, quick_edit
@@ -148,7 +148,7 @@ from imagen_sdk import get_profiles, get_profile, check_files_match_profile_type
 # Get all profiles
 profiles = await get_profiles("your_api_key")
 
-# Get specific profile
+# Get a specific profile
 profile = await get_profile("your_api_key", profile_key=5700)
 
 # Validate files before upload
@@ -158,7 +158,7 @@ check_files_match_profile_type(image_paths, profile, logger)
 result = await quick_edit(api_key, profile_key, image_paths, ...)
 ```
 
-### **Models and Enums**
+### **Models and enums**
 
 ```python
 from imagen_sdk import EditOptions, PhotographyType, CropAspectRatio
@@ -183,14 +183,14 @@ ratio = CropAspectRatio.RATIO_2X3
 
 ---
 
-## 📖 Simple Usage Examples
+## 📖 Examples of simple flows
 
-### **Minimal Example**
+### **Quick flow**
 ```python
 import asyncio
 from imagen_sdk import quick_edit, EditOptions
 
-# Edit all supported files in current directory
+# Edit all supported files in the current directory
 async def edit_photos():
     from pathlib import Path
     
@@ -237,7 +237,7 @@ async def edit_photos():
 asyncio.run(edit_photos())
 ```
 
-### **Wedding Photography Workflow**
+### **Wedding photography workflow**
 ```python
 import asyncio
 from imagen_sdk import quick_edit, PhotographyType, EditOptions
@@ -269,7 +269,7 @@ async def process_wedding():
 asyncio.run(process_wedding())
 ```
 
-### **Step-by-Step Control with Progress Tracking**
+### **Step-by-step control with progress tTracking**
 ```python
 import asyncio
 from imagen_sdk import ImagenClient, PhotographyType, EditOptions
@@ -332,9 +332,9 @@ asyncio.run(advanced_workflow())
 
 ---
 
-## 🔧 Advanced Configuration
+## 🔧 Advanced configurations
 
-### **Custom Logging**
+### **Custom logging**
 ```python
 import logging
 from imagen_sdk import ImagenClient
@@ -352,7 +352,7 @@ async with ImagenClient("api_key", logger=custom_logger, logger_level=logging.DE
     pass
 ```
 
-### **Session Management**
+### **Session management**
 ```python
 # Recommended: Use async context manager (automatic cleanup)
 async with ImagenClient("api_key") as client:
@@ -368,7 +368,7 @@ finally:
     await client.close()  # Manual cleanup required
 ```
 
-### **File Validation Utilities**
+### **File validation utilities**
 ```python
 from imagen_sdk import get_profile, check_files_match_profile_type
 import logging
@@ -394,7 +394,7 @@ async def validate_and_upload():
     # ... rest of workflow
 ```
 
-### **Performance Optimization**
+### **Performance optimization**
 ```python
 # Optimize concurrent operations based on your system
 upload_summary = await client.upload_images(
@@ -414,7 +414,7 @@ local_files = await client.download_files(
 
 ---
 
-## 🛠️ Installation & Setup
+## 🛠️ Installation & setup
 
 ### **System Requirements**
 - Python 3.7 or higher
@@ -430,7 +430,7 @@ pip install imagen-ai-sdk
 pip install --upgrade imagen-ai-sdk
 ```
 
-### **Get Your API Key**
+### **Get your API key**
 1. **Sign up** at [imagen-ai.com](https://imagen-ai.com)
 2. **Contact support** via [support.imagen-ai.com](https://support.imagen-ai.com/hc) with your account email
 3. **Set environment variable**:
@@ -445,7 +445,7 @@ pip install --upgrade imagen-ai-sdk
    $env:IMAGEN_API_KEY="your_api_key_here"
    ```
 
-### **Test Your Setup**
+### **Test your setup**
 ```python
 import asyncio
 from imagen_sdk import get_profiles
@@ -464,12 +464,12 @@ asyncio.run(test_connection())
 
 ---
 
-## 📋 Important Notes
+## 📋 Important notes
 
-### **Project Names**
-- **Project names must be unique** - You cannot create multiple projects with the same name
-- **If a project name already exists**, you'll get an error and need to choose a different name
-- **Project naming is optional** - If you don't provide a name, a random UUID will be automatically assigned
+### **Project names**
+- **Project names must be unique** - You cannot create multiple projects with the same name.
+- **If a project name already exists**, you'll get an error and need to choose a different name.
+- **Project naming is optional** - If you don't provide a name, a random UUID will be automatically assigned.
 - **Recommended approach**: Use descriptive, unique names like "ClientName-SessionType-Date"
 
 ```python
@@ -485,19 +485,19 @@ await client.create_project("Wedding Photos")  # Might fail if name exists
 ```
 
 ### **Best Practices**
-- **Use timestamps** in project names to ensure uniqueness
-- **Include client/session info** for easy identification
-- **Consider auto-generated names** for quick testing
-- **Save project UUIDs** if you need to reference projects later
-- **Separate file types**: Create different projects for RAW and JPEG files
-- **Group similar files**: Keep wedding ceremony photos separate from reception photos
+- **Use timestamps** in project names to ensure uniqueness.
+- **Include client/session info** for easy identification.
+- **Consider auto-generated names** for quick testing.
+- **Save project UUIDs** if you need to reference projects later.
+- **Separate file types**: Create different projects for RAW and JPEG files.
+- **Group similar files**: Keep wedding ceremony photos separate from reception photos.
 
 ---
 
-## 📚 Photography Types & Options
+## 📚 Photography types & options
 
-### **Photography Types**
-Choose the right type for optimal AI processing:
+### **Photography types**
+Even though it's optional to include the photography type, it ensures optimal AI processing:
 
 ```python
 from imagen_sdk import PhotographyType
@@ -515,7 +515,7 @@ PhotographyType.BOUDOIR         # Boudoir photography
 PhotographyType.SPORTS          # Sports photography
 ```
 
-### **Editing Options**
+### **Editing options**
 Customize the AI editing process:
 
 ```python
@@ -539,7 +539,7 @@ result = await quick_edit(
 )
 ```
 
-### **Crop Aspect Ratios**
+### **Crop aspect ratios**
 Available aspect ratios for cropping:
 
 ```python
@@ -553,9 +553,9 @@ CropAspectRatio.RATIO_5X7  # 5:7 aspect ratio
 
 ---
 
-## 🚨 Error Handling
+## 🚨 Error handling
 
-### **Exception Types**
+### **Exception types**
 The SDK provides specific exception types for different error scenarios:
 
 ```python
@@ -590,15 +590,15 @@ except ImagenError as e:
     # Catch-all for other API errors
 ```
 
-### **Common Issues**
+### **Common issues**
 
 #### **Authentication Error**
 ```
 ❌ Error: Invalid API key or unauthorized
 ```
 **Solutions:**
-1. Double-check your API key is correct
-2. Make sure you've contacted support to activate your key
+1. Double-check that your API key is correct.
+2. Make sure you've contacted support to activate your key.
 3. Verify environment variable is set: `echo $IMAGEN_API_KEY`
 
 #### **Project Name Already Exists**
@@ -616,30 +616,30 @@ except ImagenError as e:
 ❌ UploadError: RAW profile cannot be used with JPG files: ['photo.jpg']
 ```
 **Solutions:**
-1. **Separate file types** into different projects
-2. **Use `check_files_match_profile_type()`** before upload to validate
-3. **Check profile details** with `get_profile()` to see supported file types
+1. **Separate file types** into different projects.
+2. **Use `check_files_match_profile_type()`** before upload to validate the file types.
+3. **Check profile details** with `get_profile()` to see supported file types.
 
 #### **No Files Found**
 ```
 ❌ Error: No valid local files found to upload
 ```
 **Solutions:**
-1. Check file paths are correct and files exist
-2. **Ensure files are in supported formats** (use `SUPPORTED_FILE_FORMATS` constant)
-3. **Remember**: A single project cannot mix RAW and JPEG files
-4. Use absolute paths if relative paths aren't working
+1. Check that the file paths are correct and the files exist.
+2. **Make sure the files are in a supported formats** by using the `SUPPORTED_FILE_FORMATS` constant.
+3. **Remember**: A single project cannot mix RAW and JPEG files.
+4. Use absolute paths if relative paths aren't working.
 
 #### **Upload Failures**
 ```
 ❌ Error: Failed to upload test.jpg: Network timeout
 ```
 **Solutions:**
-1. Check your internet connection
-2. Try smaller files first to test
-3. Reduce `max_concurrent` parameter
-4. Check if files are corrupted
-5. Enable `calculate_md5=True` for integrity verification
+1. Check your internet connection.
+2. Try smaller files first to test.
+3. Reduce `max_concurrent` parameter.
+4. Check if files are corrupted.
+5. Enable `calculate_md5=True` for integrity verification.
 
 #### **Import Errors**
 ```
@@ -647,7 +647,7 @@ except ImagenError as e:
 ```
 **Solutions:**
 1. Install the package: `pip install imagen-ai-sdk`
-2. Check you're using the right Python environment
+2. Check you're using the right Python environment.
 3. Try: `pip install --upgrade imagen-ai-sdk`
 
 ### **Getting Help**
@@ -701,7 +701,7 @@ asyncio.run(test())
 ## 📞 Support & Resources
 
 ### **Need Help?**
-- **SDK Issues**: Create an issue with error details and SDK version
+- **SDK Issues**: Create an issue with error details and the SDK version.
 - **API Questions**: Visit [support.imagen-ai.com](https://support.imagen-ai.com/hc)
 - **Account Issues**: Contact support via [support.imagen-ai.com](https://support.imagen-ai.com/hc)
 
