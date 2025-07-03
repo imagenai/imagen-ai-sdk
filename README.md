@@ -268,7 +268,7 @@ async def process_wedding():
 asyncio.run(process_wedding())
 ```
 
-### **Step-by-step control with progress tTracking**
+### **Step-by-step control with progress tracking**
 ```python
 import asyncio
 from imagen_sdk import ImagenClient, PhotographyType, EditOptions
