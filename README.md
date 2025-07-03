@@ -169,7 +169,6 @@ from imagen_sdk import ImagenError, AuthenticationError, ProjectError, UploadErr
 edit_options = EditOptions(
     crop=True,
     straighten=True,
-    portrait_crop=True,
     smooth_skin=True,
     hdr_merge=False
 )
@@ -243,12 +242,12 @@ import asyncio
 from imagen_sdk import quick_edit, PhotographyType, EditOptions
 
 async def process_wedding():
-    # Define editing options for portraits
+    # Define editing options for wedding portraits
     portrait_options = EditOptions(
-        crop=True,
-        straighten=True,
-        portrait_crop=True, 
-        smooth_skin=True
+        crop=True,     # Portrait-specific cropping
+        straighten=True,        # Fix tilted shots
+        smooth_skin=True,       # Enhance skin in portraits
+        subject_mask=True       # Isolate subjects
     )
     
     result = await quick_edit(
@@ -300,7 +299,6 @@ async def advanced_workflow():
         
         # 3. Start editing with AI tools
         edit_options = EditOptions(
-            crop=True, 
             straighten=True,
             portrait_crop=True
         )
@@ -516,40 +514,102 @@ PhotographyType.SPORTS          # Sports photography
 ```
 
 ### **Editing options**
-Customize the AI editing process:
+Customize the AI editing process with comprehensive editing tools:
 
 ```python
 from imagen_sdk import EditOptions
 
-# All available options
-options = EditOptions(
-    crop=True,              # Auto-crop images
+# Basic editing options
+basic_options = EditOptions(
+    crop=True,              # General auto-crop
     straighten=True,        # Auto-straighten horizons
-    portrait_crop=True,     # Portrait-specific cropping
-    smooth_skin=True,       # Skin smoothing (portraits)
-    hdr_merge=False         # HDR bracket merging
+    smooth_skin=True        # Skin enhancement
 )
 
-# Use in quick_edit
+# Portrait photography workflow
+portrait_options = EditOptions(
+    portrait_crop=True,     # Portrait-specific cropping
+    smooth_skin=True,       # Advanced skin smoothing
+    subject_mask=True,      # Subject isolation
+    straighten=True         # Horizon correction
+)
+
+# Professional headshot workflow
+headshot_options = EditOptions(
+    headshot_crop=True,          # Headshot-optimized cropping
+    smooth_skin=True,            # Professional skin enhancement
+    subject_mask=True            # Advanced subject masking
+)
+
+# Landscape/real estate workflow
+landscape_options = EditOptions(
+    crop=True,                   # General cropping
+    sky_replacement=True,        # Sky enhancement
+    sky_replacement_template_id=1,  # Specific sky template
+    window_pull=True,            # Interior window balance
+    perspective_correction=True, # Architectural lines
+    crop_aspect_ratio="16:9"     # Custom aspect ratio
+)
+```
+
+#### **🔧 All Available Options**
+
+| Option | Type | Description | Use Case |
+|--------|------|-------------|----------|
+| `crop` | `bool` | General auto-cropping | Universal |
+| `portrait_crop` | `bool` | Portrait-specific cropping | People photography |
+| `headshot_crop` | `bool` | Headshot-optimized cropping | Close-up portraits |
+| `straighten` | `bool` | Horizon straightening | Landscapes, general |
+| `perspective_correction` | `bool` | Perspective distortion fix | Architecture, interiors |
+| `smooth_skin` | `bool` | Skin enhancement | Portraits, headshots |
+| `subject_mask` | `bool` | Advanced subject isolation | Portraits, events |
+| `sky_replacement` | `bool` | Sky enhancement | Landscapes, exteriors |
+| `sky_replacement_template_id` | `int` | Specific sky template ID | Custom sky looks |
+| `window_pull` | `bool` | Window exposure balance | Interior photography |
+| `hdr_merge` | `bool` | HDR bracket processing | High contrast scenes |
+| `crop_aspect_ratio` | `str` | Custom aspect ratio | Creative framing |
+
+#### **⚠️ Mutual Exclusivity Rules**
+
+Some editing tools are mutually exclusive and cannot be used together:
+
+**Crop Types** (choose only one):
+- `crop` OR `portrait_crop` OR `headshot_crop`
+
+**Straightening Methods** (choose only one):
+- `straighten` OR `perspective_correction`
+
+```python
+# ✅ VALID: Only one crop type
+EditOptions(crop=True, straighten=True)
+EditOptions(portrait_crop=True, smooth_skin=True)
+EditOptions(headshot_crop=True, perspective_correction=True)
+
+# ❌ INVALID: Multiple crop types will raise ValueError
+EditOptions(crop=True, portrait_crop=True)  # Error!
+EditOptions(straighten=True, perspective_correction=True)  # Error!
+```
+
+#### **📐 Custom Aspect Ratios**
+
+Use `crop_aspect_ratio` for custom framing:
+
+```python
+# Standard ratios
+EditOptions(crop=True, crop_aspect_ratio="3:2")    # Classic 35mm
+EditOptions(crop=True, crop_aspect_ratio="16:9")   # Cinematic
+EditOptions(crop=True, crop_aspect_ratio="1:1")    # Square/Instagram
+EditOptions(crop=True, crop_aspect_ratio="4:5")    # Portrait orientation
+
+# Use in workflow
 result = await quick_edit(
     api_key="your_key",
     profile_key=5700,
     image_paths=["photo.cr2"],
-    edit_options=options
+    edit_options=EditOptions(crop=True, crop_aspect_ratio="16:9")
 )
 ```
 
-### **Crop aspect ratios**
-Available aspect ratios for cropping:
-
-```python
-from imagen_sdk import CropAspectRatio
-
-# Available ratios:
-CropAspectRatio.RATIO_2X3  # 2:3 aspect ratio
-CropAspectRatio.RATIO_4X5  # 4:5 aspect ratio  
-CropAspectRatio.RATIO_5X7  # 5:7 aspect ratio
-```
 
 ---
 

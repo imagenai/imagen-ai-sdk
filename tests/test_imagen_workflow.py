@@ -212,8 +212,8 @@ class TestQuickEditWorkflow:
             crop=True,
             straighten=True,
             hdr_merge=False,
-            portrait_crop=True,
             smooth_skin=True,
+            subject_mask=True,
         )
 
         with patch("imagen_sdk.imagen_sdk.ImagenClient") as mock_client_class:
@@ -376,6 +376,83 @@ class TestEditOptionsWorkflow:
         )
         api_dict = options.to_api_dict()
         assert api_dict == {}
+
+    def test_edit_options_new_fields(self):
+        """Test EditOptions with new fields."""
+        options = EditOptions(
+            headshot_crop=True,
+            perspective_correction=True,
+            sky_replacement=True,
+            sky_replacement_template_id=123,
+            window_pull=True,
+            crop_aspect_ratio="16:9",
+            subject_mask=True,
+        )
+
+        api_dict = options.to_api_dict()
+
+        assert api_dict["headshot_crop"] is True
+        assert api_dict["perspective_correction"] is True
+        assert api_dict["sky_replacement"] is True
+        assert api_dict["sky_replacement_template_id"] == 123
+        assert api_dict["window_pull"] is True
+        assert api_dict["crop_aspect_ratio"] == "16:9"
+        assert api_dict["subject_mask"] is True
+
+    def test_edit_options_crop_mutual_exclusivity(self):
+        """Test that crop options are mutually exclusive."""
+        # Test crop + portrait_crop
+        with pytest.raises(ValueError, match="Only one of crop, headshot_crop, or portrait_crop can be set to True"):
+            EditOptions(crop=True, portrait_crop=True)
+
+        # Test crop + headshot_crop
+        with pytest.raises(ValueError, match="Only one of crop, headshot_crop, or portrait_crop can be set to True"):
+            EditOptions(crop=True, headshot_crop=True)
+
+        # Test portrait_crop + headshot_crop
+        with pytest.raises(ValueError, match="Only one of crop, headshot_crop, or portrait_crop can be set to True"):
+            EditOptions(portrait_crop=True, headshot_crop=True)
+
+        # Test all three together
+        with pytest.raises(ValueError, match="Only one of crop, headshot_crop, or portrait_crop can be set to True"):
+            EditOptions(crop=True, portrait_crop=True, headshot_crop=True)
+
+    def test_edit_options_straighten_mutual_exclusivity(self):
+        """Test that straighten and perspective_correction are mutually exclusive."""
+        with pytest.raises(ValueError, match="Only one of straighten or perspective_correction can be set to True"):
+            EditOptions(straighten=True, perspective_correction=True)
+
+    def test_edit_options_valid_combinations(self):
+        """Test valid combinations of mutually exclusive options."""
+        # Only crop
+        options = EditOptions(crop=True, straighten=True)
+        assert options.crop is True
+        assert options.straighten is True
+
+        # Only portrait_crop
+        options = EditOptions(portrait_crop=True, perspective_correction=True)
+        assert options.portrait_crop is True
+        assert options.perspective_correction is True
+
+        # Only headshot_crop
+        options = EditOptions(headshot_crop=True, straighten=True)
+        assert options.headshot_crop is True
+        assert options.straighten is True
+
+        # False values should not trigger validation
+        options = EditOptions(crop=False, portrait_crop=True, straighten=False, perspective_correction=True)
+        assert options.crop is False
+        assert options.portrait_crop is True
+        assert options.straighten is False
+        assert options.perspective_correction is True
+
+    def test_edit_options_none_values_allowed(self):
+        """Test that None values don't trigger mutual exclusivity validation."""
+        # None values should be allowed alongside True values
+        options = EditOptions(crop=True, portrait_crop=None, headshot_crop=None)
+        assert options.crop is True
+        assert options.portrait_crop is None
+        assert options.headshot_crop is None
 
 
 class TestEnumIntegration:

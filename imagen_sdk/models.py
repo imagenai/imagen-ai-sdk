@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Profile(BaseModel):
@@ -50,6 +50,29 @@ class EditOptions(BaseModel):
     hdr_merge: bool | None = Field(None, description="Whether to apply HDR merge")
     portrait_crop: bool | None = Field(None, description="Whether to apply portrait cropping")
     smooth_skin: bool | None = Field(None, description="Whether to apply skin smoothing")
+    subject_mask: bool | None = Field(None, description="Whether to apply subject masking")
+
+    headshot_crop: bool | None = Field(None, description="Whether to apply headshot cropping")
+    perspective_correction: bool | None = Field(None, description="Whether to correct perspective")
+
+    sky_replacement: bool | None = Field(None, description="Whether to apply sky replacement")
+    sky_replacement_template_id: int | None = Field(None, description="Sky replacement template ID")
+    window_pull: bool | None = Field(None, description="Whether to apply window pull")
+    crop_aspect_ratio: str | None = Field(None, description="Custom aspect ratio for cropping")
+
+    @model_validator(mode="after")
+    def check_mutual_exclusivity(self):
+        # Enforce: crop, headshot_crop, portrait_crop are mutually exclusive
+        crop_tools = [self.crop, self.headshot_crop, self.portrait_crop]
+        crop_tools_set = [tool for tool in crop_tools if tool is True]
+        if len(crop_tools_set) > 1:
+            raise ValueError("Only one of crop, headshot_crop, or portrait_crop can be set to True.")
+
+        # Enforce: straighten and perspective_correction are mutually exclusive
+        if self.straighten is True and self.perspective_correction is True:
+            raise ValueError("Only one of straighten or perspective_correction can be set to True.")
+
+        return self
 
     def to_api_dict(self) -> dict[str, Any]:
         return self.model_dump(exclude_none=True)
