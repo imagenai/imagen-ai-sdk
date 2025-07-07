@@ -35,6 +35,7 @@ async def main():
             image_paths=[str(p) for p in photos],
             download=True,
             download_dir="edited",
+            export=True,
         )
 
         print(f"✅ Done! {len(result.downloaded_files)} edited photos saved to ./edited/")
