@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imagen-ai-sdk"
-version = "1.0.0"
+version = "1.0.1"
 description = "A robust, Pydantic-powered SDK for the Imagen AI photo editing workflow"
 authors = [{name = "Shahar Polak", email = "shahar@imagen-ai.com"}]
 license = {text = "MIT"}
