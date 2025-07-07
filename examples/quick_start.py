@@ -8,6 +8,7 @@ The simplest way to edit photos with AI.
 import asyncio
 import os
 from pathlib import Path
+
 from imagen_sdk import quick_edit
 
 
@@ -15,10 +16,10 @@ async def main():
     """Edit photos with one function call"""
 
     # Get API key
-    api_key = os.getenv('IMAGEN_API_KEY', 'your_api_key_here')
+    api_key = os.getenv("IMAGEN_API_KEY", "your_api_key_here")
 
     # Find photos to edit
-    photos = [f for f in Path('.').glob('./sample_photos/*.dng') if f.is_file()]
+    photos = [f for f in Path(".").glob("./sample_photos/*.dng") if f.is_file()]
 
     if not photos:
         print("No .jpg files found. Add some photos to this directory.")
@@ -33,7 +34,7 @@ async def main():
             profile_key=5700,
             image_paths=[str(p) for p in photos],
             download=True,
-            download_dir="edited"
+            download_dir="edited",
         )
 
         print(f"✅ Done! {len(result.downloaded_files)} edited photos saved to ./edited/")

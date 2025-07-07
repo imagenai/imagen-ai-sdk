@@ -58,44 +58,43 @@ One-Line Usage:
     print(f"Exported files: {result.exported_files}")
 """
 
+from .enums import CropAspectRatio, PhotographyType
+from .exceptions import (
+    AuthenticationError,
+    DownloadError,
+    ImagenError,
+    ProjectError,
+    UploadError,
+)
 from .imagen_sdk import (
-    # Main client
+    JPG_EXTENSIONS,
+    RAW_EXTENSIONS,
+    SUPPORTED_FILE_FORMATS,
     ImagenClient,
-
-    # Pydantic Models for data structures
-    Profile,
-    ProfileApiResponse,
-    ProfileApiData,
-    ProjectCreationResponseData,
-    ProjectCreationResponse,
+    check_files_match_profile_type,
+    get_profile,
+    get_profiles,
+    quick_edit,
+)
+from .models import (
+    DownloadLink,
+    DownloadLinksList,
+    DownloadLinksResponse,
+    EditOptions,
     FileUploadInfo,
     PresignedUrl,
     PresignedUrlList,
     PresignedUrlResponse,
-    EditOptions,
+    Profile,
+    ProfileApiData,
+    ProfileApiResponse,
+    ProjectCreationResponse,
+    ProjectCreationResponseData,
+    QuickEditResult,
     StatusDetails,
     StatusResponse,
-    DownloadLink,
-    DownloadLinksList,
-    DownloadLinksResponse,
     UploadResult,
     UploadSummary,
-    QuickEditResult,
-
-    # Exceptions
-    ImagenError,
-    AuthenticationError,
-    ProjectError,
-    UploadError,
-    DownloadError,  # Added this missing export
-
-    # Enums for editing options
-    PhotographyType,
-    CropAspectRatio,
-
-    # Convenience functions
-    quick_edit,
-    get_profiles,
 )
 
 # Version info
@@ -107,46 +106,38 @@ __url__ = "https://github.com/imagenai/imagen-ai-sdk"
 
 # Main exports for public API
 __all__ = [
-    # Main class
-    'ImagenClient',
-
-    # Core Pydantic Models (commonly used)
-    'Profile',
-    'EditOptions',
-    'UploadResult',
-    'UploadSummary',
-    'QuickEditResult',
-    'StatusDetails',
-
-    # Response Models (for advanced usage)
-    'ProfileApiResponse',
-    'ProfileApiData',
-    'ProjectCreationResponseData',
-    'ProjectCreationResponse',
-    'FileUploadInfo',
-    'PresignedUrl',
-    'PresignedUrlList',
-    'PresignedUrlResponse',
-    'StatusResponse',
-    'DownloadLink',
-    'DownloadLinksList',
-    'DownloadLinksResponse',
-
-    # Exceptions
-    'ImagenError',
-    'AuthenticationError',
-    'ProjectError',
-    'UploadError',
-    'DownloadError',
-
-    # Enums
-    'PhotographyType',
-    'CropAspectRatio',
-
-    # Functions
-    'quick_edit',
-    'get_profiles',
-
-    # Metadata
-    '__version__',
+    "ImagenClient",
+    "Profile",
+    "EditOptions",
+    "UploadResult",
+    "UploadSummary",
+    "QuickEditResult",
+    "StatusDetails",
+    "ProfileApiResponse",
+    "ProfileApiData",
+    "ProjectCreationResponseData",
+    "ProjectCreationResponse",
+    "FileUploadInfo",
+    "PresignedUrl",
+    "PresignedUrlList",
+    "PresignedUrlResponse",
+    "StatusResponse",
+    "DownloadLink",
+    "DownloadLinksList",
+    "DownloadLinksResponse",
+    "ImagenError",
+    "AuthenticationError",
+    "ProjectError",
+    "UploadError",
+    "DownloadError",
+    "PhotographyType",
+    "CropAspectRatio",
+    "quick_edit",
+    "get_profiles",
+    "get_profile",
+    "check_files_match_profile_type",
+    "RAW_EXTENSIONS",
+    "JPG_EXTENSIONS",
+    "SUPPORTED_FILE_FORMATS",
+    "__version__",
 ]
