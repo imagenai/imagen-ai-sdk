@@ -22,7 +22,7 @@ async def main():
     photos = [f for f in Path(".").glob("./sample_photos/*.dng") if f.is_file()]
 
     if not photos:
-        print("No .jpg files found. Add some photos to this directory.")
+        print("No .dng files found. Add some photos to this directory.")
         return
 
     print(f"Editing {len(photos)} photos...")
