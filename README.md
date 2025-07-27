@@ -1,6 +1,6 @@
-# Imagen AI Python SDK
+# SDK in Python for Imagen
 
-**Professional AI photo editing automation for photographers**
+**Automate editing for photographers with AI**
 
 Transform your post-production workflow with AI-powered batch editing. Upload hundreds of photos, apply professional edits automatically, and get download links in minutes.
 
@@ -21,7 +21,7 @@ pip install imagen-ai-sdk
 export IMAGEN_API_KEY="your_api_key_here"
 ```
 
-### 3. Edit photos in one line!
+### 3. Edit photos with one line of code
 ```python
 import asyncio
 from imagen_sdk import quick_edit, EditOptions
@@ -71,7 +71,7 @@ Imagen supports a wide range of photography file formats. The SDK includes built
 `.jpg`, `.jpeg`
 
 ### **Complete list** (SUPPORTED_FILE_FORMATS)
-All RAW and JPEG formats combined. Use this constant to validate your code.
+The complete list includes all RAW and JPEG formats combined. Use this constant to validate your code.
 
 ```python
 from imagen_sdk import SUPPORTED_FILE_FORMATS, RAW_EXTENSIONS, JPG_EXTENSIONS
@@ -95,14 +95,14 @@ The SDK returns **Adobe-compatible edit instructions** (XMP files) that preserve
 - Further adjust the AI-generated edits.
 - Export to any format you need.
 
-### **Profile keys: Your editing style**
-Profile keys represent your unique editing style learned by the AI:
+### **AI Profiles: Your editing style**
+AI Profiles represent your unique editing style learned by the AI:
 1. **Start with the Imagen app** to train your Personal AI Profile.
 2. **Perfect your style** with 3,000+ edited photos in the app.
 3. **Get your profile key** and use it in the API for consistent automation.
 4. **Scale your workflow** and apply your exact editing style to thousands of photos.
 
-### **Export options**
+### **Export final photos**
 You can also export final JPEG files directly:
 ```python
 result = await quick_edit(
@@ -268,7 +268,7 @@ async def process_wedding():
 asyncio.run(process_wedding())
 ```
 
-### **Step-by-step control with progress tracking**
+### **Step-by-step flow to track progress**
 ```python
 import asyncio
 from imagen_sdk import ImagenClient, PhotographyType, EditOptions
@@ -417,7 +417,7 @@ local_files = await client.download_files(
 ### **System Requirements**
 - Python 3.7 or higher
 - Internet connection
-- Imagen AI API key
+- Imagen API key
 
 ### **Install the SDK**
 ```bash
@@ -430,7 +430,7 @@ pip install --upgrade imagen-ai-sdk
 
 ### **Get your API key**
 1. **Sign up** at [imagen-ai.com](https://imagen-ai.com)
-2. **Contact support** via [support.imagen-ai.com](https://support.imagen-ai.com/hc) with your account email
+2. **Contact support** via [support.imagen-ai.com](https://support.imagen-ai.com/hc) with the email you used to sign up.
 3. **Set environment variable**:
    ```bash
    # Mac/Linux
@@ -465,9 +465,9 @@ asyncio.run(test_connection())
 ## 📋 Important notes
 
 ### **Project names**
-- **Project names must be unique** - You cannot create multiple projects with the same name.
+- **Project names must be unique.** You can't create multiple projects with the same name.
 - **If a project name already exists**, you'll get an error and need to choose a different name.
-- **Project naming is optional** - If you don't provide a name, a random UUID will be automatically assigned.
+- **Project naming is optional.** If you don't provide a name, a random UUID will be automatically assigned.
 - **Recommended approach**: Use descriptive, unique names like "ClientName-SessionType-Date"
 
 ```python
@@ -495,7 +495,7 @@ await client.create_project("Wedding Photos")  # Might fail if name exists
 ## 📚 Photography types & options
 
 ### **Photography types**
-Even though it's optional to include the photography type, it ensures optimal AI processing:
+Even though it's optional to include the photography type, it makes sure the AI processing is the best it can be.
 
 ```python
 from imagen_sdk import PhotographyType
@@ -514,7 +514,7 @@ PhotographyType.SPORTS          # Sports photography
 ```
 
 ### **Editing options**
-Customize the AI editing process with comprehensive editing tools:
+Customize the editing process with AI editing tools:
 
 ```python
 from imagen_sdk import EditOptions
@@ -585,12 +585,12 @@ EditOptions(crop=True, straighten=True)
 EditOptions(portrait_crop=True, smooth_skin=True)
 EditOptions(headshot_crop=True, perspective_correction=True)
 
-# ❌ INVALID: Multiple crop types will raise ValueError
+# ❌ INVALID: More than one crop type will raise ValueError
 EditOptions(crop=True, portrait_crop=True)  # Error!
 EditOptions(straighten=True, perspective_correction=True)  # Error!
 ```
 
-#### **📐 Custom Aspect Ratios**
+#### **📐 Custom aspect ratios**
 
 Use `crop_aspect_ratio` for custom framing:
 
@@ -767,7 +767,7 @@ asyncio.run(test())
 
 ### **Resources**
 - **Main Website**: [imagen-ai.com](https://imagen-ai.com)
-- **Support Center**: [support.imagen-ai.com](https://support.imagen-ai.com/hc)
+- **Help Center**: [support.imagen-ai.com]([https://support.imagen-ai.com/hc](https://support.imagen-ai.com/hc/en-us/articles/19137253415965-Automate-your-post-production-workflow-with-Imagen-API))
 - **Community**: [Imagen AI Facebook Group](https://www.facebook.com/share/g/16fydbDZ3s/)
 
 ### **Before Contacting Support**
