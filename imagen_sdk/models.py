@@ -1,6 +1,8 @@
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .enums import ClientType, DNGCompression, ProjectSource
 
 
 class Profile(BaseModel):
@@ -60,6 +62,11 @@ class EditOptions(BaseModel):
     window_pull: bool | None = Field(None, description="Whether to apply window pull")
     crop_aspect_ratio: str | None = Field(None, description="Custom aspect ratio for cropping")
 
+    callback_url: str | None = Field(None, description="Optional webhook URL called when editing completes")
+    hdr_output_compression: DNGCompression | None = Field(
+        None, description="Compression mode for HDR-merged DNG output (LOSSY or LOSSLESS)"
+    )
+
     @model_validator(mode="after")
     def check_mutual_exclusivity(self):
         # Enforce: crop, headshot_crop, portrait_crop are mutually exclusive
@@ -75,7 +82,7 @@ class EditOptions(BaseModel):
         return self
 
     def to_api_dict(self) -> dict[str, Any]:
-        return self.model_dump(exclude_none=True)
+        return self.model_dump(exclude_none=True, mode="json")
 
 
 class StatusDetails(BaseModel):
@@ -121,3 +128,202 @@ class QuickEditResult(BaseModel):
     export_links: list[str] | None = Field(None, description="URLs to download exported images")
     downloaded_files: list[str] | None = Field(None, description="Local paths of downloaded edited files")
     exported_files: list[str] | None = Field(None, description="Local paths of downloaded exported files")
+
+
+# =============================================================================
+# SKY REPLACEMENT TEMPLATES
+# =============================================================================
+
+
+class SkyTemplate(BaseModel):
+    id: int = Field(..., description="Sky replacement template ID")
+    is_default: bool = Field(..., description="Whether this is the default sky template")
+
+
+class SkyTemplatesResponse(BaseModel):
+    templates: list[SkyTemplate] = Field(..., description="Available sky replacement templates")
+
+
+# =============================================================================
+# PROJECT LISTING / RETRIEVAL
+# =============================================================================
+
+
+class PaginationInfo(BaseModel):
+    total: int = Field(..., description="Total number of matching projects")
+    size: int = Field(..., description="Page size")
+    page: int = Field(..., description="Current page index (0-based)")
+
+
+class ProjectListItem(BaseModel):
+    project_id: int | None = Field(None, description="Numeric project ID")
+    project_uuid: str = Field(..., description="Project UUID")
+    name: str | None = Field(None, description="Project name")
+    status: str = Field(..., description="Project status")
+    created_at: str = Field(..., description="Creation timestamp")
+    number_of_images: int = Field(..., description="Number of images in the project")
+    profile: str | None = Field(None, description="Profile associated with the project")
+    ai_tools: list[str] | None = Field(None, description="AI tools applied/available for the project")
+    customer_reference_id: int = Field(..., description="Customer reference ID")
+    thumbnail_src: str | None = Field(None, description="Thumbnail image URL")
+    export_status: str | None = Field(None, description="Export status, if any")
+
+
+class ProjectListResponse(BaseModel):
+    projects: list[ProjectListItem] = Field(..., description="Projects on this page")
+    pagination: PaginationInfo = Field(..., description="Pagination metadata")
+
+
+# =============================================================================
+# PER-IMAGE EXPORT LINKS
+# =============================================================================
+
+
+class TemporaryFileUploadData(BaseModel):
+    file_name: str = Field(..., description="Name of the file")
+    upload_link: str = Field(..., description="Presigned URL for upload")
+
+
+class FileDownloadInfo(BaseModel):
+    file_name: str = Field(..., description="Name of the file")
+    download_link: str = Field(..., description="URL to download the file")
+
+
+# =============================================================================
+# AI ENHANCEMENT / COPILOT / FINALIZE REQUESTS
+# =============================================================================
+
+
+class AITool(BaseModel):
+    """A single AI enhancement (quick) tool available for a project.
+
+    The ``enhancement_type`` value is what you pass as ``tool_id`` to ``enhance_image``.
+    Extra fields returned by the API are preserved.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    enhancement_type: str = Field(..., description="Tool identifier; use as enhance_image's tool_id")
+    label: str | None = Field(None, description="Human-readable tool name")
+    enabled_for_batch: bool | None = Field(None, description="Whether the tool can run across a batch")
+
+
+class AIToolsResponse(BaseModel):
+    """Response describing the AI enhancement tools available for a project."""
+
+    model_config = ConfigDict(extra="allow")
+
+    prompts: list[AITool] = Field(default_factory=list, description="Available AI enhancement tools")
+
+
+class EnhanceResult(BaseModel):
+    """Result of an AI enhancement (``enhance_image``) or copilot (``apply_copilot``) operation.
+
+    Mirrors the server's ``AIEnhancementResponse``. ``version_id`` is intentionally
+    untyped (``Any``) because the API declares it as an optional, open-typed field.
+    Unrecognized fields are preserved.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    status: str = Field(..., description="Operation status, e.g. 'SUCCESS'")
+    version_id: Any = Field(None, description="Version ID of the produced image, if any")
+    enhanced_image_url: str = Field(..., description="URL of the enhanced image")
+
+
+class EnhanceImageRequest(BaseModel):
+    tool_id: str = Field(..., min_length=1, description="Identifier of the AI quick tool to apply")
+    parent_version_id: int | None = Field(None, description="Version ID to base this enhancement on")
+    project_source: ProjectSource = Field(ProjectSource.REGULAR, description="Project source (REGULAR or I2I)")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True, mode="json")
+
+
+class CopilotRequest(BaseModel):
+    instruction: str = Field(..., min_length=1, max_length=255, description="Natural language editing instruction")
+    parent_version_id: int | None = Field(None, description="Version ID to base this instruction on")
+    project_source: ProjectSource = Field(ProjectSource.REGULAR, description="Project source (REGULAR or I2I)")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True, mode="json")
+
+
+class ResetCopilotRequest(BaseModel):
+    project_source: ProjectSource = Field(ProjectSource.REGULAR, description="Project source (REGULAR or I2I)")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+
+class FinalizeProjectRequest(BaseModel):
+    project_source: ProjectSource = Field(ProjectSource.REGULAR, description="Project source (REGULAR or I2I)")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+
+# =============================================================================
+# I2I (IMAGE-TO-IMAGE) EDIT + MULTIPART UPLOADS
+# =============================================================================
+
+
+class I2IEditOptions(BaseModel):
+    hdr_merge: bool | None = Field(None, description="Whether to apply HDR merge")
+    sky_replacement: bool | None = Field(None, description="Whether to apply sky replacement")
+    sky_replacement_template_id: int | None = Field(None, description="Sky replacement template ID")
+    perspective_correction: bool | None = Field(None, description="Whether to correct perspective")
+    callback_url: str | None = Field(None, description="Optional webhook URL called when editing completes")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True, mode="json")
+
+
+class CreateMultipartUploadLinksRequest(BaseModel):
+    file_name: str = Field(..., min_length=1, description="Name of the file to upload")
+    part_count: int = Field(..., ge=1, le=10000, description="Number of parts the file is split into")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+
+class MultipartUploadPartUrl(BaseModel):
+    part_number: int = Field(..., description="1-based part number")
+    upload_url: str = Field(..., description="Presigned URL for this part")
+
+
+class MultipartUploadLinksResponse(BaseModel):
+    upload_id: str = Field(..., description="Multipart upload ID")
+    key: str = Field(..., description="Storage key for the upload")
+    parts: list[MultipartUploadPartUrl] = Field(..., description="Presigned URLs for each part")
+
+
+class CompleteMultipartUploadRequest(BaseModel):
+    file_name: str = Field(..., min_length=1, description="Name of the uploaded file")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+
+class MessageResponse(BaseModel):
+    """A simple ``{"message": ...}`` response (e.g. from ``start_i2i_editing``)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    message: str = Field(..., description="Human-readable status message")
+
+
+class SingleDownloadLink(BaseModel):
+    """A single download link, as returned by ``get_i2i_download_link``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    download_link: str = Field(..., description="Temporary URL to download the file")
+
+
+class CreateFilesUploadLinksRequest(BaseModel):
+    files_list: list[FileUploadInfo] = Field(..., description="Files to obtain upload links for")
+    client_type: ClientType = Field(ClientType.API, description="Client type for the upload request")
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True, mode="json")

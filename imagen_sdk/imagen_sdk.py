@@ -11,13 +11,16 @@ import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import unquote, urlparse
 
 import aiofiles
 import httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
+from ._enhancement import EnhancementMixin
+from ._i2i import I2IMixin
+from ._projects import ProjectManagementMixin
 from .enums import PhotographyType
 from .exceptions import (
     AuthenticationError,
@@ -27,22 +30,29 @@ from .exceptions import (
     UploadError,
 )
 from .models import (
-    DownloadLinksResponse,
+    AIToolsResponse,
+    DownloadLinksList,
     EditOptions,
     FileUploadInfo,
-    PresignedUrlResponse,
+    PresignedUrlList,
     Profile,
-    ProfileApiData,
-    ProjectCreationResponse,
+    ProfileApiResponse,
+    ProjectCreationResponseData,
+    ProjectListResponse,
     QuickEditResult,
+    SkyTemplate,
     StatusDetails,
-    StatusResponse,
     UploadResult,
     UploadSummary,
 )
 
 # Default logger for the SDK
 _default_logger = logging.getLogger("imagen_sdk.ImagenClient")
+
+# Single source of truth for the production API base URL.
+DEFAULT_BASE_URL = "https://api.imagen-ai.com/v1"
+
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 RAW_EXTENSIONS = {
     ".dng",
@@ -74,7 +84,7 @@ SUPPORTED_FILE_FORMATS = RAW_EXTENSIONS | JPG_EXTENSIONS
 # =============================================================================
 
 
-class ImagenClient:
+class ImagenClient(ProjectManagementMixin, EnhancementMixin, I2IMixin):
     """
     Main Imagen AI client for handling the complete photo editing workflow.
 
@@ -144,7 +154,7 @@ class ImagenClient:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://api-beta.imagen-ai.com/v1",
+        base_url: str = DEFAULT_BASE_URL,
         logger: logging.Logger | None = None,
         logger_level: int | None = None,
     ):
@@ -198,7 +208,7 @@ class ImagenClient:
             self._session = httpx.AsyncClient(
                 headers={
                     "x-api-key": self.api_key,
-                    "User-Agent": "Imagen-Python-SDK/1.0.0",
+                    "User-Agent": "Imagen-Python-SDK/1.1.0",
                 },
                 timeout=httpx.Timeout(300.0),
             )
@@ -266,14 +276,7 @@ class ImagenClient:
 
             # Check for other client or server errors
             elif response.status_code >= 400:
-                try:
-                    # Try to parse a detailed error message from the JSON response
-                    error_data = response.json()
-                    message = error_data.get("detail", response.text)
-                except Exception:
-                    # Fallback to the raw response text if JSON parsing fails
-                    message = response.text
-
+                message = self._extract_error_message(response)
                 self._logger.error(f"API error {response.status_code}: {message}")
                 raise ImagenError(f"API Error ({response.status_code}): {message}")
 
@@ -286,6 +289,86 @@ class ImagenClient:
         except httpx.RequestError as e:
             self._logger.error(f"Request failed: {e}")
             raise ImagenError(f"Request failed: {e}")
+
+    @staticmethod
+    def _extract_error_message(response: httpx.Response) -> str:
+        """
+        Extract a human-readable error message from an error response.
+
+        The production API returns errors as ``{"error": {"message": ...}}``; older/other
+        responses may use ``{"detail": ...}``. This prefers ``error.message``, falls back
+        to ``detail``, and finally to the raw response text.
+
+        Args:
+            response: The httpx error response.
+
+        Returns:
+            The best available error message string.
+        """
+        try:
+            data = response.json()
+        except Exception:
+            return response.text
+
+        if isinstance(data, dict):
+            error = data.get("error")
+            if isinstance(error, dict) and error.get("message"):
+                return str(error["message"])
+            if isinstance(error, str) and error:
+                return error
+            if data.get("detail"):
+                return str(data["detail"])
+
+        return response.text
+
+    @staticmethod
+    def _unwrap(payload: Any) -> Any:
+        """
+        Return the inner body when the API wraps a response in a sole ``{"data": ...}`` envelope.
+
+        Production responses (https://api.imagen-ai.com/v1) return payloads at the root,
+        while legacy/beta responses wrapped the body in a single top-level ``data`` key.
+        This helper transparently supports both so existing parsers keep working.
+
+        Args:
+            payload: The parsed JSON response (typically a dict).
+
+        Returns:
+            The unwrapped inner payload if a sole ``data`` key is present, else the payload as-is.
+        """
+        if isinstance(payload, dict) and set(payload.keys()) == {"data"}:
+            return payload["data"]
+        return payload
+
+    def _parse_model(
+        self,
+        payload: Any,
+        model: type[_ModelT],
+        what: str,
+        error_type: type[ImagenError] = ImagenError,
+    ) -> _ModelT:
+        """
+        Unwrap the response envelope and validate it into a Pydantic model.
+
+        Centralizes the recurring ``model.model_validate(self._unwrap(payload))`` +
+        ValidationError handling used across all parse sites.
+
+        Args:
+            payload: The parsed JSON response.
+            model: The Pydantic model class to validate into.
+            what: Short description used in the error message (e.g. "download links response").
+            error_type: Exception type to raise on failure (default ImagenError).
+
+        Returns:
+            The validated model instance.
+
+        Raises:
+            error_type: If the payload cannot be validated.
+        """
+        try:
+            return model.model_validate(self._unwrap(payload))
+        except ValidationError as e:
+            raise error_type(f"Could not parse {what}: {e}")
 
     async def create_project(self, name: str | None = None) -> str:
         """
@@ -328,15 +411,9 @@ class ImagenClient:
         self._logger.info(f"Creating project: {name or 'Unnamed'}")
         response_json = await self._make_request("POST", "/projects/", json=data)
 
-        try:
-            # Validate the response and extract the UUID
-            project_response = ProjectCreationResponse.model_validate(response_json)
-            project_uuid = project_response.data.project_uuid
-            self._logger.info(f"Created project with UUID: {project_uuid}")
-            return project_uuid
-        except ValidationError as e:
-            self._logger.error(f"Failed to parse project creation response: {e}")
-            raise ProjectError(f"Could not parse project creation response: {e}")
+        project_data = self._parse_model(response_json, ProjectCreationResponseData, "project creation response", ProjectError)
+        self._logger.info(f"Created project with UUID: {project_data.project_uuid}")
+        return project_data.project_uuid
 
     async def upload_images(
         self,
@@ -406,6 +483,42 @@ class ImagenClient:
 
         self._logger.info(f"Starting upload of {len(image_paths)} images to project {project_uuid}")
 
+        files_to_upload, valid_paths = await self._prepare_upload_infos(image_paths, calculate_md5)
+
+        # Get presigned URLs from the API. The payload is built inline (rather than via
+        # CreateFilesUploadLinksRequest) to preserve the exact original request shape for
+        # backward compatibility; the server defaults client_type to "API".
+        upload_payload = {"files_list": [f.model_dump(exclude_none=True) for f in files_to_upload]}
+        response_json = await self._make_request(
+            "POST",
+            f"/projects/{project_uuid}/get_temporary_upload_links",
+            json=upload_payload,
+        )
+
+        upload_links = self._parse_model(response_json, PresignedUrlList, "presigned URL response", UploadError)
+
+        # Create a mapping of filenames to their upload URLs for easy access
+        upload_links_map = {url.file_name: url.upload_link for url in upload_links.files_list}
+
+        return await self._run_concurrent_uploads(valid_paths, upload_links_map, max_concurrent, progress_callback)
+
+    async def _prepare_upload_infos(
+        self,
+        image_paths: list[str | Path],
+        calculate_md5: bool,
+    ) -> tuple[list[FileUploadInfo], list[Path]]:
+        """
+        Validate local paths and build FileUploadInfo entries for upload-link requests.
+
+        Shared by `upload_images` and `upload_i2i_images`. Invalid paths are skipped
+        with a warning.
+
+        Returns:
+            Tuple of (file upload infos, validated local paths) in matching order.
+
+        Raises:
+            UploadError: If no valid local files are found.
+        """
         files_to_upload: list[FileUploadInfo] = []
         valid_paths: list[Path] = []
 
@@ -421,23 +534,31 @@ class ImagenClient:
         if not valid_paths:
             raise UploadError("No valid local files found to upload.")
 
-        # Get presigned URLs from the API
-        upload_payload = {"files_list": [f.model_dump(exclude_none=True) for f in files_to_upload]}
-        response_json = await self._make_request(
-            "POST",
-            f"/projects/{project_uuid}/get_temporary_upload_links",
-            json=upload_payload,
-        )
+        return files_to_upload, valid_paths
 
-        try:
-            upload_links_response = PresignedUrlResponse.model_validate(response_json)
-        except ValidationError as e:
-            raise UploadError(f"Could not parse presigned URL response: {e}")
+    async def _run_concurrent_uploads(
+        self,
+        valid_paths: list[Path],
+        upload_links_map: dict[str, str],
+        max_concurrent: int,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> UploadSummary:
+        """
+        Upload a set of local files concurrently to their presigned URLs.
 
-        # Create a mapping of filenames to their upload URLs for easy access
-        upload_links_map = {url.file_name: url.upload_link for url in upload_links_response.data.files_list}
+        Shared by both the standard (`upload_images`) and image-to-image
+        (`upload_i2i_images`) upload flows.
 
-        # Inner function to handle the upload of a single file
+        Args:
+            valid_paths: Local files to upload (already validated to exist).
+            upload_links_map: Mapping of file name -> presigned upload URL.
+            max_concurrent: Maximum number of concurrent uploads.
+            progress_callback: Optional progress callback (index, total, file path).
+
+        Returns:
+            UploadSummary with per-file results and aggregate counts.
+        """
+
         async def upload_single_file(file_path: Path, index: int) -> UploadResult:
             # Report progress before starting the upload
             if progress_callback:
@@ -607,15 +728,10 @@ class ImagenClient:
         """
         self._logger.debug(f"Getting download links for project {project_uuid}")
         response_json = await self._make_request("GET", f"/projects/{project_uuid}/edit/get_temporary_download_links")
-        try:
-            # Validate the full response structure
-            links_response = DownloadLinksResponse.model_validate(response_json)
-            # Access the list via .data and extract just the URL strings
-            links = [link.download_link for link in links_response.data.files_list]
-            self._logger.info(f"Retrieved {len(links)} download links")
-            return links
-        except ValidationError as e:
-            raise ProjectError(f"Could not parse download links response: {e}")
+        links_list = self._parse_model(response_json, DownloadLinksList, "download links response", ProjectError)
+        links = [link.download_link for link in links_list.files_list]
+        self._logger.info(f"Retrieved {len(links)} download links")
+        return links
 
     async def export_project(self, project_uuid: str) -> StatusDetails:
         """
@@ -699,15 +815,10 @@ class ImagenClient:
         """
         self._logger.debug(f"Getting export links for project {project_uuid}")
         response_json = await self._make_request("GET", f"/projects/{project_uuid}/export/get_temporary_download_links")
-        try:
-            # Validate the full response structure
-            links_response = DownloadLinksResponse.model_validate(response_json)
-            # Access the list via .data and extract just the URL strings
-            links = [link.download_link for link in links_response.data.files_list]
-            self._logger.info(f"Retrieved {len(links)} export links")
-            return links
-        except ValidationError as e:
-            raise ProjectError(f"Could not parse export links response: {e}")
+        links_list = self._parse_model(response_json, DownloadLinksList, "export links response", ProjectError)
+        links = [link.download_link for link in links_list.files_list]
+        self._logger.info(f"Retrieved {len(links)} export links")
+        return links
 
     async def download_files(
         self,
@@ -905,10 +1016,13 @@ class ImagenClient:
         self._logger.debug("Getting available profiles")
         response_json = await self._make_request("GET", "/profiles")
         try:
-            # Validate the full response structure
-            api_data = ProfileApiData.model_validate(response_json)
-            # Return the nested list of profiles
-            profiles = api_data.data.profiles
+            # Profiles come back either as a bare list (production) or wrapped in
+            # {"data": {"profiles": [...]}} (legacy). Normalize both shapes.
+            unwrapped = self._unwrap(response_json)
+            if isinstance(unwrapped, list):
+                profiles = [Profile.model_validate(p) for p in unwrapped]
+            else:
+                profiles = ProfileApiResponse.model_validate(unwrapped).profiles
             self._logger.info(f"Retrieved {len(profiles)} profiles")
             return profiles
         except ValidationError as e:
@@ -983,14 +1097,10 @@ class ImagenClient:
             endpoint = f"/projects/{project_uuid}/{operation}/status"
             status_json = await self._make_request("GET", endpoint)
 
-            try:
-                # Validate the full response, including the 'data' wrapper
-                status_response = StatusResponse.model_validate(status_json)
-            except ValidationError as e:
-                raise ProjectError(f"Could not parse status response for {operation}: {e}")
+            # Envelope-tolerant: handles both the legacy 'data' wrapper and the
+            # production unwrapped {status: ...} shape.
+            status_details = self._parse_model(status_json, StatusDetails, f"status response for {operation}", ProjectError)
 
-            # Access the actual status details through the .data attribute
-            status_details = status_response.data
             elapsed_int = int(elapsed)
 
             # Construct a progress string if progress data is available
@@ -1026,7 +1136,7 @@ class ImagenClient:
 # =============================================================================
 
 
-async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai.com/v1") -> list[Profile]:
+async def get_profiles(api_key: str, base_url: str = DEFAULT_BASE_URL) -> list[Profile]:
     """
     Get available editing profiles using a standalone function.
 
@@ -1056,6 +1166,72 @@ async def get_profiles(api_key: str, base_url: str = "https://api-beta.imagen-ai
     """
     async with ImagenClient(api_key, base_url) as client:
         return await client.get_profiles()
+
+
+async def get_sky_replacement_templates(api_key: str, base_url: str = DEFAULT_BASE_URL) -> list[SkyTemplate]:
+    """
+    List available sky replacement templates using a standalone function.
+
+    Args:
+        api_key (str): Your Imagen AI API key
+        base_url (str): API base URL (default: production URL)
+
+    Returns:
+        List[SkyTemplate]: Available sky replacement templates (use ``id`` for
+                           ``EditOptions.sky_replacement_template_id``)
+
+    Example:
+        ```python
+        from imagen_sdk import get_sky_replacement_templates
+
+        templates = await get_sky_replacement_templates("your_api_key")
+        default_template = next((t for t in templates if t.is_default), templates[0])
+        ```
+    """
+    async with ImagenClient(api_key, base_url) as client:
+        return await client.get_sky_replacement_templates()
+
+
+async def list_projects(
+    api_key: str,
+    size: int = 20,
+    page: int = 0,
+    base_url: str = DEFAULT_BASE_URL,
+) -> ProjectListResponse:
+    """
+    List projects in your account using a standalone function.
+
+    Args:
+        api_key (str): Your Imagen AI API key
+        size (int): Page size (1-100, default 20)
+        page (int): Zero-based page index (default 0)
+        base_url (str): API base URL (default: production URL)
+
+    Returns:
+        ProjectListResponse: A page of projects plus pagination metadata
+    """
+    async with ImagenClient(api_key, base_url) as client:
+        return await client.list_projects(size=size, page=page)
+
+
+async def get_ai_tools(
+    api_key: str,
+    project_uuid: str,
+    base_url: str = DEFAULT_BASE_URL,
+) -> AIToolsResponse:
+    """
+    List AI enhancement tools for a project using a standalone function.
+
+    Args:
+        api_key (str): Your Imagen AI API key
+        project_uuid (str): UUID of the project
+        base_url (str): API base URL (default: production URL)
+
+    Returns:
+        AIToolsResponse whose ``prompts`` list contains the available tools.
+    """
+    async with ImagenClient(api_key, base_url) as client:
+        return await client.get_ai_tools(project_uuid)
 
 
 def check_files_match_profile_type(image_paths: list[str | Path], profile: Profile, logger: logging.Logger):
@@ -1142,7 +1318,7 @@ async def quick_edit(
     download: bool = False,
     download_dir: str | Path = "downloads",
     export_download_dir: str | Path | None = None,
-    base_url: str = "https://api-beta.imagen-ai.com/v1",
+    base_url: str = DEFAULT_BASE_URL,
     logger: logging.Logger | None = None,
     logger_level: int | None = None,
 ) -> QuickEditResult:
@@ -1273,7 +1449,7 @@ async def quick_edit(
         return result
 
 
-async def get_profile(api_key: str, profile_key: int, base_url: str = "https://api-beta.imagen-ai.com/v1") -> Profile:
+async def get_profile(api_key: str, profile_key: int, base_url: str = DEFAULT_BASE_URL) -> Profile:
     """
     Fetch a specific profile by its key.
 

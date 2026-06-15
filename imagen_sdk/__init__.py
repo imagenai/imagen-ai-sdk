@@ -58,7 +58,13 @@ One-Line Usage:
     print(f"Exported files: {result.exported_files}")
 """
 
-from .enums import CropAspectRatio, PhotographyType
+from .enums import (
+    ClientType,
+    CropAspectRatio,
+    DNGCompression,
+    PhotographyType,
+    ProjectSource,
+)
 from .exceptions import (
     AuthenticationError,
     DownloadError,
@@ -72,16 +78,34 @@ from .imagen_sdk import (
     SUPPORTED_FILE_FORMATS,
     ImagenClient,
     check_files_match_profile_type,
+    get_ai_tools,
     get_profile,
     get_profiles,
+    get_sky_replacement_templates,
+    list_projects,
     quick_edit,
 )
 from .models import (
+    AITool,
+    AIToolsResponse,
+    CompleteMultipartUploadRequest,
+    CopilotRequest,
+    CreateFilesUploadLinksRequest,
+    CreateMultipartUploadLinksRequest,
     DownloadLink,
     DownloadLinksList,
     DownloadLinksResponse,
     EditOptions,
+    EnhanceImageRequest,
+    EnhanceResult,
+    FileDownloadInfo,
     FileUploadInfo,
+    FinalizeProjectRequest,
+    I2IEditOptions,
+    MessageResponse,
+    MultipartUploadLinksResponse,
+    MultipartUploadPartUrl,
+    PaginationInfo,
     PresignedUrl,
     PresignedUrlList,
     PresignedUrlResponse,
@@ -90,15 +114,22 @@ from .models import (
     ProfileApiResponse,
     ProjectCreationResponse,
     ProjectCreationResponseData,
+    ProjectListItem,
+    ProjectListResponse,
     QuickEditResult,
+    ResetCopilotRequest,
+    SingleDownloadLink,
+    SkyTemplate,
+    SkyTemplatesResponse,
     StatusDetails,
     StatusResponse,
+    TemporaryFileUploadData,
     UploadResult,
     UploadSummary,
 )
 
 # Version info
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "Shahar Polak"
 __email__ = "shahar@imagen-ai.com"
 __description__ = "A robust, Pydantic-powered SDK for the Imagen AI photo editing workflow"
@@ -125,16 +156,48 @@ __all__ = [
     "DownloadLink",
     "DownloadLinksList",
     "DownloadLinksResponse",
+    # New models (v1.1.0)
+    "AITool",
+    "AIToolsResponse",
+    "EnhanceResult",
+    "MessageResponse",
+    "SingleDownloadLink",
+    "SkyTemplate",
+    "SkyTemplatesResponse",
+    "PaginationInfo",
+    "ProjectListItem",
+    "ProjectListResponse",
+    "TemporaryFileUploadData",
+    "FileDownloadInfo",
+    "EnhanceImageRequest",
+    "CopilotRequest",
+    "ResetCopilotRequest",
+    "FinalizeProjectRequest",
+    "I2IEditOptions",
+    "CreateFilesUploadLinksRequest",
+    "CreateMultipartUploadLinksRequest",
+    "MultipartUploadPartUrl",
+    "MultipartUploadLinksResponse",
+    "CompleteMultipartUploadRequest",
+    # Exceptions
     "ImagenError",
     "AuthenticationError",
     "ProjectError",
     "UploadError",
     "DownloadError",
+    # Enums
     "PhotographyType",
     "CropAspectRatio",
+    "DNGCompression",
+    "ProjectSource",
+    "ClientType",
+    # Convenience functions
     "quick_edit",
     "get_profiles",
     "get_profile",
+    "get_sky_replacement_templates",
+    "list_projects",
+    "get_ai_tools",
     "check_files_match_profile_type",
     "RAW_EXTENSIONS",
     "JPG_EXTENSIONS",

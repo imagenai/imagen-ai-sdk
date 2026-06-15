@@ -140,6 +140,19 @@ async with ImagenClient("your_api_key") as client:
 - `download_files(download_links, output_dir="downloads", max_concurrent=5, progress_callback=None)` - Download files.
 - `get_profiles()` - List available editing profiles.
 
+#### **New in v1.1.0**
+- `list_projects(size=20, page=0, client_type=ClientType.API, is_archived=False, get_thumbnail=True)` - List projects (paginated).
+- `get_project(project_uuid, get_thumbnail=True)` / `get_project_uuid(project_name)` - Retrieve a project / resolve a name to UUID.
+- `get_sky_replacement_templates()` - List sky replacement templates (use a template's `id` for `EditOptions.sky_replacement_template_id`).
+- `get_export_upload_link(project_uuid, file_name)` / `get_export_download_link(project_uuid, file_name)` - Per-image export links.
+- `get_ai_tools(project_uuid)` - List AI enhancement tools for a project.
+- `enhance_image(project_uuid, filename, tool_id, parent_version_id=None)` - Apply an AI quick tool to an edited image.
+- `apply_copilot(project_uuid, filename, instruction, parent_version_id=None)` / `reset_copilot(project_uuid, filename)` - Natural-language editing via the AI copilot.
+- `finalize_project(project_uuid)` - Generate final download URLs, upscaling enhanced images.
+- I2I (image-to-image): `create_i2i_project`, `list_i2i_projects`, `validate_i2i_project_name`, `get_i2i_project`, `upload_i2i_images`, `upload_i2i_file_multipart`, `start_i2i_editing`, `get_i2i_download_links`, `get_i2i_download_link`.
+
+> **Base URL:** the SDK now targets production (`https://api.imagen-ai.com/v1`) by default. All existing methods are unchanged and fully backward compatible.
+
 ### **Popular functions**
 
 ```python
@@ -173,11 +186,115 @@ edit_options = EditOptions(
     hdr_merge=False
 )
 
-# Use photography types for optimization
+# Use photography types for optimization (now includes SCHOOL)
 photography_type = PhotographyType.WEDDING
 
 # Access crop ratios (if needed)
 ratio = CropAspectRatio.RATIO_2X3
+
+# New EditOptions fields (v1.1.0)
+from imagen_sdk import DNGCompression
+edit_options = EditOptions(
+    hdr_merge=True,
+    hdr_output_compression=DNGCompression.LOSSLESS,  # LOSSY (default) or LOSSLESS
+    callback_url="https://example.com/imagen-webhook",  # notified when editing completes
+)
+```
+
+---
+
+## 🤖 AI enhancement & copilot (v1.1.0)
+
+After a project has been edited, apply AI quick tools or natural-language instructions
+to individual images, then finalize to get upscaled deliverables.
+
+> **Prerequisites**
+> - **Export first.** The whole enhancement pipeline (`get_ai_tools`, `enhance_image`,
+>   `apply_copilot`, `finalize_project`) requires an **exported** project. Calling it on a
+>   project that hasn't finished exporting raises `ImagenError("API Error (400): Project
+>   has not been exported yet.")`. Run the standard edit → export flow first.
+> - **Realistic-only accounts.** Some accounts are restricted to "realistic" edits.
+>   Generative tools and copilot instructions classified as generative are rejected with
+>   `ImagenError("API Error (400): Only realistic editing requests are supported.")`.
+>   This is enforced by the editing service (not the SDK).
+
+```python
+from imagen_sdk import ImagenClient
+
+async with ImagenClient("your_api_key") as client:
+    # Discover available tools for the project
+    tools = await client.get_ai_tools(project_uuid)
+    for tool in tools.prompts:
+        print(tool.enhancement_type, "-", tool.label, "(batch:", tool.enabled_for_batch, ")")
+
+    # Apply a quick tool to one image (tool_id == a tool's enhancement_type)
+    result = await client.enhance_image(project_uuid, "IMG_0001.jpg", tool_id="remove_cameraman")
+    print(result.status, result.version_id, result.enhanced_image_url)
+
+    # Or instruct the AI copilot in natural language (returns the same EnhanceResult shape)
+    await client.apply_copilot(project_uuid, "IMG_0001.jpg", "add warm twilight lighting")
+    # Reset the copilot conversation for an image if needed
+    await client.reset_copilot(project_uuid, "IMG_0001.jpg")
+
+    # Generate final download URLs (upscales enhanced images)
+    final = await client.finalize_project(project_uuid)
+    for f in final.files_list:
+        print(f.file_name, f.download_link)
+```
+
+### Sky replacement templates
+
+```python
+templates = await client.get_sky_replacement_templates()
+default = next((t for t in templates if t.is_default), templates[0])
+
+edit_options = EditOptions(sky_replacement=True, sky_replacement_template_id=default.id)
+```
+
+## 🖼️ Image-to-image (I2I)
+
+The I2I workflow has its own project namespace and supports multipart uploads for large
+files. Note there is no I2I status endpoint — completion is signalled via `callback_url`
+or by polling `get_i2i_download_links` until links appear.
+
+```python
+from imagen_sdk import ImagenClient, I2IEditOptions
+
+async with ImagenClient("your_api_key") as client:
+    project_uuid = await client.create_i2i_project("My I2I Project")
+
+    # Small files: standard concurrent upload
+    await client.upload_i2i_images(project_uuid, ["image1.jpg", "image2.jpg"])
+
+    # Large files: chunked multipart upload (auto split / complete, aborts on failure)
+    await client.upload_i2i_file_multipart(project_uuid, "huge_scan.tif")
+
+    edit = await client.start_i2i_editing(
+        project_uuid,
+        I2IEditOptions(perspective_correction=True, callback_url="https://example.com/hook"),
+    )
+    print(edit.message)
+
+    # All files at once...
+    links = await client.get_i2i_download_links(project_uuid)
+    await client.download_files(links, "i2i_output")
+
+    # ...or a single file's link
+    single = await client.get_i2i_download_link(project_uuid, "image1.jpg")
+    print(single.download_link)
+```
+
+## 📂 Project management (v1.1.0)
+
+```python
+async with ImagenClient("your_api_key") as client:
+    listing = await client.list_projects(size=20, page=0)
+    print(f"{listing.pagination.total} projects total")
+    for project in listing.projects:
+        print(project.project_uuid, project.name, project.status)
+
+    one = await client.get_project(listing.projects[0].project_uuid)
+    uuid = await client.get_project_uuid("My Project Name")
 ```
 
 ---

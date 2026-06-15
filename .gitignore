@@ -152,9 +152,35 @@ Thumbs.db
 *.png
 *.raw
 *.dng
+# RAW camera formats (sample/test photos must never be committed)
+*.arw
+*.ARW
+*.nef
+*.NEF
+*.cr2
+*.CR2
+*.cr3
+*.CR3
+*.raf
+*.RAF
+*.rw2
+*.RW2
+*.orf
+*.ORF
+*.pef
+*.PEF
+*.srw
+*.SRW
+# Apple HEIC/HEIF photos
+*.heic
+*.HEIC
+*.heif
+*.HEIF
 test_photos/
 examples/sample_photos/*.dng
 examples/edited
 output/
 downloads/
+# Eval / benchmark scratch workspace
+imagen-cli-workspace/
 CLAUDE.md

@@ -134,7 +134,7 @@ class TestConvenienceFunctions:
             assert profiles[2].profile_type == "Talent"
 
             # Verify client was created and used correctly
-            mock_client_class.assert_called_once_with("test-api-key", "https://api-beta.imagen-ai.com/v1")
+            mock_client_class.assert_called_once_with("test-api-key", "https://api.imagen-ai.com/v1")
             mock_client.get_profiles.assert_called_once()
 
     @pytest.mark.asyncio
