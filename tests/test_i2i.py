@@ -94,6 +94,48 @@ class TestI2IUpload:
                 args, _ = client._make_request.call_args
                 assert args == ("POST", "/i2i/projects/proj/get_temporary_upload_links")
 
+    @pytest.mark.asyncio
+    async def test_large_file_auto_routes_to_multipart(self, client, tmp_path, mock_request_factory):
+        big = tmp_path / "big.bin"
+        big.write_bytes(b"x" * 50)
+        # threshold below the file size -> must use multipart, never the batch endpoint
+        with mock_request_factory({"files_list": []}):
+            with patch.object(client, "upload_i2i_file_multipart", new=AsyncMock()) as mp:
+                summary = await client.upload_i2i_images("proj", [str(big)], multipart_threshold=10)
+                assert summary.successful == 1 and summary.total == 1
+                mp.assert_awaited_once()
+                client._make_request.assert_not_called()  # no batch single-PUT request
+
+    @pytest.mark.asyncio
+    async def test_mixed_sizes_split_between_paths(self, client, tmp_path, mock_request_factory):
+        small = tmp_path / "small.jpg"
+        small.write_bytes(b"x" * 5)
+        big = tmp_path / "big.bin"
+        big.write_bytes(b"x" * 100)
+        response = {"files_list": [{"file_name": "small.jpg", "upload_link": "https://up"}]}
+        with mock_request_factory(response):
+            with (
+                patch.object(client, "_upload_to_s3", new=AsyncMock()) as put,
+                patch.object(client, "upload_i2i_file_multipart", new=AsyncMock()) as mp,
+            ):
+                summary = await client.upload_i2i_images("proj", [str(small), str(big)], multipart_threshold=10)
+                assert summary.total == 2 and summary.successful == 2
+                put.assert_awaited_once()  # small via single PUT
+                mp.assert_awaited_once()  # big via multipart
+                # batch request sent only the small file
+                _, kwargs = client._make_request.call_args
+                assert [f["file_name"] for f in kwargs["json"]["files_list"]] == ["small.jpg"]
+
+    @pytest.mark.asyncio
+    async def test_large_file_multipart_failure_recorded(self, client, tmp_path, mock_request_factory):
+        big = tmp_path / "big.bin"
+        big.write_bytes(b"x" * 50)
+        with mock_request_factory({"files_list": []}):
+            with patch.object(client, "upload_i2i_file_multipart", new=AsyncMock(side_effect=Exception("boom"))):
+                summary = await client.upload_i2i_images("proj", [str(big)], multipart_threshold=10)
+                assert summary.failed == 1 and summary.successful == 0
+                assert "boom" in summary.results[0].error
+
 
 class TestI2IMultipart:
     @pytest.mark.asyncio

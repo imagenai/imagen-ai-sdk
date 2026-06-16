@@ -253,9 +253,14 @@ edit_options = EditOptions(sky_replacement=True, sky_replacement_template_id=def
 
 ## 🖼️ Image-to-image (I2I)
 
-The I2I workflow has its own project namespace and supports multipart uploads for large
-files. Note there is no I2I status endpoint — completion is signalled via `callback_url`
-or by polling `get_i2i_download_links` until links appear.
+The I2I workflow has its own project namespace. Note there is no I2I status endpoint —
+completion is signalled via `callback_url` or by polling `get_i2i_download_links` until
+links appear.
+
+`upload_i2i_images` is the recommended entry point: it routes each file automatically by
+size — small files use a batched single PUT, files above `multipart_threshold` (default
+64 MB) use chunked multipart upload. You don't pick the method. (Multipart is I2I-only;
+the standard `upload_images` flow has no multipart path.)
 
 ```python
 from imagen_sdk import ImagenClient, I2IEditOptions
@@ -263,11 +268,11 @@ from imagen_sdk import ImagenClient, I2IEditOptions
 async with ImagenClient("your_api_key") as client:
     project_uuid = await client.create_i2i_project("My I2I Project")
 
-    # Small files: standard concurrent upload
-    await client.upload_i2i_images(project_uuid, ["image1.jpg", "image2.jpg"])
+    # Auto-routed: small files -> single PUT, large files -> multipart, transparently
+    await client.upload_i2i_images(project_uuid, ["image1.jpg", "huge_scan.tif"])
 
-    # Large files: chunked multipart upload (auto split / complete, aborts on failure)
-    await client.upload_i2i_file_multipart(project_uuid, "huge_scan.tif")
+    # (Advanced escape hatch — force multipart for one file)
+    # await client.upload_i2i_file_multipart(project_uuid, "huge_scan.tif")
 
     edit = await client.start_i2i_editing(
         project_uuid,

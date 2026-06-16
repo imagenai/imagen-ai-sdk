@@ -1,12 +1,18 @@
 """
 Image-to-image (I2I) mixin for ImagenClient.
 
+I2I is a separate project type that takes input images and produces transformed
+output images (e.g. HDR merge, sky replacement, perspective correction), distinct
+from the classic RAW/JPG cull-edit-export workflow.
+
 Adds the full ``/v1/i2i/...`` project family:
 
 - create_i2i_project / list_i2i_projects / validate_i2i_project_name / get_i2i_project
-- upload_i2i_images (reuses the shared concurrent-upload helpers)
-- multipart uploads for large files: create / complete / abort, plus the high-level
-  upload_i2i_file_multipart helper
+- upload_i2i_images: the recommended upload entry point; routes each file by size
+  (small -> single PUT, large -> multipart) so callers never choose a method
+- multipart upload primitives for large files: create / complete / abort, plus the
+  high-level upload_i2i_file_multipart helper (used by upload_i2i_images, also public
+  as an advanced escape hatch)
 - start_i2i_editing (trigger only; there is no I2I status endpoint, completion is
   signalled via callback_url or by download links becoming available)
 - get_i2i_download_links / get_i2i_download_link / get_i2i_upload_link
@@ -30,6 +36,7 @@ from .models import (
     CreateFilesUploadLinksRequest,
     CreateMultipartUploadLinksRequest,
     DownloadLinksList,
+    FileUploadInfo,
     I2IEditOptions,
     MessageResponse,
     MultipartUploadLinksResponse,
@@ -39,6 +46,7 @@ from .models import (
     ProjectListResponse,
     SingleDownloadLink,
     TemporaryFileUploadData,
+    UploadResult,
     UploadSummary,
 )
 
@@ -149,22 +157,36 @@ class I2IMixin(_CoreClientMixin):
         max_concurrent: int = 5,
         calculate_md5: bool = False,
         progress_callback: Callable[[int, int, str], None] | None = None,
+        multipart_threshold: int = DEFAULT_MULTIPART_PART_SIZE,
     ) -> UploadSummary:
         """
-        Upload images to an I2I project concurrently.
+        Upload images to an I2I project, picking the right mechanism per file.
 
-        Mirrors ``upload_images`` but targets the I2I upload-link endpoint. For very
-        large files use ``upload_i2i_file_multipart`` instead.
+        This is the recommended I2I upload entry point: each file is routed
+        automatically based on its size, so callers never choose an upload method.
+
+        - Files at or below ``multipart_threshold`` are batched into a single
+          ``get_temporary_upload_links`` request and uploaded concurrently with a
+          single presigned PUT each.
+        - Files above the threshold are uploaded with S3 multipart
+          (``upload_i2i_file_multipart``), which chunks the file and is resilient on
+          large/slow transfers.
+
+        Multipart is only available for I2I projects (the standard ``upload_images``
+        flow has no multipart option), which is why auto-routing lives here.
 
         Args:
             project_uuid: UUID of the I2I project.
             image_paths: Local image file paths to upload.
-            max_concurrent: Maximum concurrent uploads (default 5).
+            max_concurrent: Maximum concurrent uploads / parts (default 5).
             calculate_md5: Whether to compute MD5 hashes for integrity (default False).
             progress_callback: Optional progress callback (index, total, file path).
+                Reported for the single-PUT batch; multipart files are reported once each.
+            multipart_threshold: Size in bytes above which a file uses multipart upload
+                (default 64 MB). Set higher to prefer single PUT, lower to chunk sooner.
 
         Returns:
-            UploadSummary with per-file results and aggregate counts.
+            UploadSummary with per-file results and aggregate counts across both paths.
         """
         if max_concurrent < 1:
             raise ValueError("max_concurrent must be at least 1")
@@ -172,15 +194,48 @@ class I2IMixin(_CoreClientMixin):
         self._logger.info(f"Starting I2I upload of {len(image_paths)} images to project {project_uuid}")
         files_to_upload, valid_paths = await self._prepare_upload_infos(image_paths, calculate_md5)
 
-        upload_request = CreateFilesUploadLinksRequest(files_list=files_to_upload)
-        response_json = await self._make_request(
-            "POST",
-            f"/i2i/projects/{project_uuid}/get_temporary_upload_links",
-            json=upload_request.to_api_dict(),
+        # Route each file by size: small -> batched single PUT, large -> multipart.
+        small_infos: list[FileUploadInfo] = []
+        small_paths: list[Path] = []
+        large_paths: list[Path] = []
+        for info, path in zip(files_to_upload, valid_paths):
+            if path.stat().st_size > multipart_threshold:
+                large_paths.append(path)
+            else:
+                small_infos.append(info)
+                small_paths.append(path)
+
+        results: list[UploadResult] = []
+
+        if small_paths:
+            upload_request = CreateFilesUploadLinksRequest(files_list=small_infos)
+            response_json = await self._make_request(
+                "POST",
+                f"/i2i/projects/{project_uuid}/get_temporary_upload_links",
+                json=upload_request.to_api_dict(),
+            )
+            upload_links = self._parse_model(response_json, PresignedUrlList, "I2I presigned URL response", UploadError)
+            upload_links_map = {url.file_name: url.upload_link for url in upload_links.files_list}
+            batch = await self._run_concurrent_uploads(small_paths, upload_links_map, max_concurrent, progress_callback)
+            results.extend(batch.results)
+
+        for path in large_paths:
+            self._logger.info(f"Routing large file to multipart upload: {path.name}")
+            try:
+                await self.upload_i2i_file_multipart(project_uuid, path, max_concurrent=max_concurrent)
+                results.append(UploadResult(file=str(path), success=True, error=None))
+            except Exception as e:
+                self._logger.error(f"Multipart upload failed for {path.name}: {e}")
+                results.append(UploadResult(file=str(path), success=False, error=str(e)))
+            if progress_callback:
+                progress_callback(len(results), len(valid_paths), str(path))
+
+        return UploadSummary(
+            total=len(results),
+            successful=sum(1 for r in results if r.success),
+            failed=sum(1 for r in results if not r.success),
+            results=results,
         )
-        upload_links = self._parse_model(response_json, PresignedUrlList, "I2I presigned URL response", UploadError)
-        upload_links_map = {url.file_name: url.upload_link for url in upload_links.files_list}
-        return await self._run_concurrent_uploads(valid_paths, upload_links_map, max_concurrent, progress_callback)
 
     async def get_i2i_upload_link(self, project_uuid: str, file_name: str) -> TemporaryFileUploadData:
         """
@@ -288,6 +343,9 @@ class I2IMixin(_CoreClientMixin):
             raise UploadError(f"File not found for multipart upload: {path}")
 
         file_size = path.stat().st_size
+        # S3 allows at most 10000 parts; grow part_size if needed to stay within that.
+        if file_size:
+            part_size = max(part_size, math.ceil(file_size / 10000))
         part_count = max(1, math.ceil(file_size / part_size))
         self._logger.info(f"Multipart-uploading {path.name} ({file_size} bytes, {part_count} parts) to {project_uuid}")
 
