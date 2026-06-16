@@ -368,11 +368,12 @@ sequenceDiagram
     participant S3 as Object storage
     U->>API: 1. POST /i2i/projects/ (name?)
     API-->>U: project_uuid
-    alt small files
+    Note over U: 2. upload_i2i_images routes each file by size
+    alt file <= multipart_threshold (batched)
         U->>API: 2a. POST /i2i/projects/{uuid}/get_temporary_upload_links
         API-->>U: presigned links
-        U->>S3: PUT each file (concurrent)
-    else large file
+        U->>S3: PUT each small file (concurrent)
+    else file > multipart_threshold
         U->>API: 2b. POST /i2i/projects/{uuid}/multipart_uploads (file_name, part_count)
         API-->>U: upload_id, key, part URLs
         U->>S3: PUT each part (concurrent)
@@ -394,19 +395,40 @@ sequenceDiagram
 | Validate name | `GET /i2i/projects/is_valid_name?name=` | Returns bool; a 2xx with no explicit flag is treated as valid. |
 | Get one | `GET /i2i/projects/{uuid}?get_thumbnail=` | Returns a `ProjectListItem`. |
 
-### Upload — standard
+### Upload — auto-routed (recommended)
 
-`POST /i2i/projects/{uuid}/get_temporary_upload_links` then concurrent PUT
-(§2.5). Body uses `{ files_list, client_type }` (defaults `client_type = API`).
+`upload_i2i_images` is the single entry point for I2I uploads. Callers pass any
+mix of files and never choose an upload mechanism — each file is routed by size
+against `multipart_threshold` (default **64 MB**):
 
-Single-file link: `GET /i2i/projects/{uuid}/get_upload_link?file_name=`.
+- **At or below the threshold:** collected and uploaded as a batch — one
+  `POST /i2i/projects/{uuid}/get_temporary_upload_links` request (body
+  `{ files_list, client_type }`, default `client_type = API`) followed by a single
+  concurrent PUT per file (§2.5).
+- **Above the threshold:** uploaded via S3 multipart (see below). Each large file
+  is one independent multipart upload.
+
+Results from both paths are merged into one `UploadSummary` (`total`, `successful`,
+`failed`, per-file `results`); a failure on any one file is captured, not fatal
+(partial success, as in §2.5). `max_concurrent` bounds both the batch PUTs and the
+parts of a multipart file.
+
+> Multipart is **I2I-only** — the Regular `upload_images` flow (§4) has no
+> multipart path — which is why auto-routing lives in the I2I upload method.
+
+Single-file upload link (advanced): `GET /i2i/projects/{uuid}/get_upload_link?file_name=`.
 
 ### Upload — multipart (large files)
 
-For one large file, split into parts and upload each to its own presigned URL.
+Used automatically by `upload_i2i_images` for files above the threshold, and also
+exposed directly (`upload_i2i_file_multipart`) as an advanced escape hatch to force
+multipart for a single file. Splits the file into parts and uploads each to its own
+presigned URL.
 
 - **Part size:** default **64 MB** (S3 requires ≥ 5 MB per part except the last).
-- **Part count:** `ceil(file_size / part_size)`, minimum 1, range 1–10000.
+  If the file would exceed S3's 10,000-part cap at the chosen size, the part size
+  is grown automatically: `part_size = max(part_size, ceil(file_size / 10000))`.
+- **Part count:** `ceil(file_size / part_size)`, minimum 1, never above 10,000.
 - **Concurrency:** default **4** concurrent parts.
 - **Memory bound:** read each chunk *inside* the semaphore so peak memory is
   bounded to `max_concurrent × part_size`.
