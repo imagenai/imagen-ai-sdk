@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.env
+*.tgz
+.DS_Store
+.idea/
+docs/
+examples/sample_photos
