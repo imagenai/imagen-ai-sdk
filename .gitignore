@@ -176,9 +176,12 @@ Thumbs.db
 *.HEIC
 *.heif
 *.HEIF
+# Lightroom/Imagen XMP sidecars (edit metadata, never committed)
+*.xmp
 test_photos/
-examples/sample_photos/*.dng
-examples/edited
+# Local-only test photos — sample inputs are never committed (any format)
+examples/sample_photos/
+**/edited/
 output/
 downloads/
 # Eval / benchmark scratch workspace
