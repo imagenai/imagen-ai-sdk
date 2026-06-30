@@ -48,7 +48,7 @@ async def main():
         # Step 1: Create client
         print("📡 Creating Imagen AI client...")
         # For this example, we use a dev URL. Remove base_url for production.
-        async with ImagenClient(API_KEY, base_url="https://api-beta.imagen-ai.com/v1") as client:
+        async with ImagenClient(API_KEY, base_url="https://api.imagen-ai.com/v1") as client:
             # Step 2: Get available profiles
             print("\n📋 Fetching available profiles...")
             profiles = await client.get_profiles()

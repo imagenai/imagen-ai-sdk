@@ -14,6 +14,7 @@ class PhotographyType(Enum):
     FAMILY_NEWBORN = "FAMILY_NEWBORN"
     BOUDOIR = "BOUDOIR"
     SPORTS = "SPORTS"
+    SCHOOL = "SCHOOL"
 
 
 class CropAspectRatio(Enum):
@@ -22,3 +23,17 @@ class CropAspectRatio(Enum):
     RATIO_2X3 = "2X3"
     RATIO_4X5 = "4X5"
     RATIO_5X7 = "5X7"
+
+
+class DNGCompression(Enum):
+    """Compression mode for HDR-merged DNG output (from API spec)."""
+
+    LOSSY = "LOSSY"
+    LOSSLESS = "LOSSLESS"
+
+
+class ProjectSource(Enum):
+    """Project source for AI enhancement / copilot operations (from API spec)."""
+
+    REGULAR = "REGULAR"
+    I2I = "I2I"

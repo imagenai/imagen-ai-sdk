@@ -1,0 +1,66 @@
+name: Release Python SDK
+
+# Publishes sdks/python to PyPI. Two gates before anything is uploaded:
+#   1. Only runs on a deliberate `python-v*` tag (or manual dispatch) — never on
+#      a push/merge to a branch, so merging to master never publishes.
+#   2. The `publish` job `needs: test`, so a failing test suite blocks the upload.
+#
+# Auth: PyPI Trusted Publishing (OIDC) — no stored token. One-time setup required
+# on PyPI: add a trusted publisher for this repo with workflow
+# `release-python.yml` and environment `pypi`. Until that's configured the publish
+# step fails closed (nothing is released). To use a token instead, drop the
+# `permissions`/`environment` lines and pass `password: ${{ secrets.PYPI_API_TOKEN }}`
+# to the publish action.
+
+on:
+  push:
+    tags:
+      - "python-v*"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: sdks/python
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check imagen_sdk/
+      - run: pytest
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # PyPI Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # On a tag release, the tag must match the package version, or we'd ship a
+      # version that doesn't match what was tagged.
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/python-v')
+        run: |
+          tag="${GITHUB_REF_NAME#python-v}"
+          pkg=$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')
+          echo "tag version: $tag | package version: $pkg"
+          [ "$tag" = "$pkg" ] || { echo "::error::tag ($tag) does not match package version ($pkg)"; exit 1; }
+
+      - run: pip install build
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdks/python/dist

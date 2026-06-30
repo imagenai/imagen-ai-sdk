@@ -3,8 +3,10 @@ repos:
     # Ruff version.
     rev: v0.12.1
     hooks:
-      # Run the linter.
+      # Run the linter. Scoped to the Python SDK; Node lint/format hooks can be added alongside.
       - id: ruff-check
         args: [ --fix ]
+        files: ^sdks/python/.*\.py$
       # Run the formatter.
       - id: ruff-format
+        files: ^sdks/python/.*\.py$

@@ -106,7 +106,7 @@ class TestImagenClientInit:
     def test_default_initialization(self, api_key):
         client = ImagenClient(api_key)
         assert client.api_key == api_key
-        assert client.base_url == "https://api-beta.imagen-ai.com/v1"
+        assert client.base_url == "https://api.imagen-ai.com/v1"
         assert client._session is None
 
     def test_custom_base_url(self, api_key):
@@ -171,7 +171,7 @@ class TestImagenClientRequests:
             result = await client._make_request("GET", "/test")
 
             assert result == json_data
-            mock_session.return_value.request.assert_called_once_with("GET", "https://api-beta.imagen-ai.com/v1/test")
+            mock_session.return_value.request.assert_called_once_with("GET", "https://api.imagen-ai.com/v1/test")
 
     @pytest.mark.asyncio
     async def test_make_request_success_204(self, client, mock_helpers):
@@ -194,7 +194,7 @@ class TestImagenClientRequests:
             await client._make_request("GET", "///test///")
 
             # Should normalize the URL
-            expected_url = "https://api-beta.imagen-ai.com/v1/test///"
+            expected_url = "https://api.imagen-ai.com/v1/test///"
             mock_session.return_value.request.assert_called_once_with("GET", expected_url)
 
     @pytest.mark.asyncio
@@ -216,6 +216,18 @@ class TestImagenClientRequests:
             mock_session.return_value.request = AsyncMock(return_value=mock_response)
 
             with pytest.raises(ImagenError, match="API Error \\(400\\): Bad request details"):
+                await client._make_request("GET", "/test")
+
+    @pytest.mark.asyncio
+    async def test_make_request_400_with_error_envelope(self, client, mock_helpers):
+        # Production error shape: {"error": {"message": ...}}
+        json_data = {"error": {"message": "Only realistic editing requests are supported"}}
+        mock_response = mock_helpers.create_http_response(400, json_data, '{"error": {"message": "..."}}')
+
+        with patch.object(client, "_get_session") as mock_session:
+            mock_session.return_value.request = AsyncMock(return_value=mock_response)
+
+            with pytest.raises(ImagenError, match="API Error \\(400\\): Only realistic editing requests are supported"):
                 await client._make_request("GET", "/test")
 
     @pytest.mark.asyncio

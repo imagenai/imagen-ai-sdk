@@ -34,7 +34,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
+docs
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
@@ -52,6 +52,10 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+graphify-out
+e2e_i2i_output
+.agents
+.claude
 
 # Translations
 *.mo
@@ -152,9 +156,38 @@ Thumbs.db
 *.png
 *.raw
 *.dng
+# RAW camera formats (sample/test photos must never be committed)
+*.arw
+*.ARW
+*.nef
+*.NEF
+*.cr2
+*.CR2
+*.cr3
+*.CR3
+*.raf
+*.RAF
+*.rw2
+*.RW2
+*.orf
+*.ORF
+*.pef
+*.PEF
+*.srw
+*.SRW
+# Apple HEIC/HEIF photos
+*.heic
+*.HEIC
+*.heif
+*.HEIF
+# Lightroom/Imagen XMP sidecars (edit metadata, never committed)
+*.xmp
 test_photos/
-examples/sample_photos/*.dng
-examples/edited
+# Local-only test photos — sample inputs are never committed (any format)
+examples/sample_photos/
+**/edited/
 output/
 downloads/
+# Eval / benchmark scratch workspace
+imagen-cli-workspace/
 CLAUDE.md

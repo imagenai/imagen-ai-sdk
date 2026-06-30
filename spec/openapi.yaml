@@ -1,0 +1,884 @@
+openapi: 3.1.0
+info:
+  title: Imagen AI API
+  version: "1.1.0"
+  description: |
+    Reference wire contract for the Imagen AI API, derived from
+    `docs/WORKFLOWS.md` (the behavioral source of truth). This spec documents the
+    HTTP surface every language SDK targets; where this file and `WORKFLOWS.md`
+    disagree, `WORKFLOWS.md` (and ultimately the code) wins.
+
+    **Response envelope (applies to every response).** Payloads come in two shapes
+    and clients must tolerate both:
+      - Production: payload at the root, e.g. `{"project_uuid": "..."}`.
+      - Legacy/beta: the same payload wrapped in a sole `data` key,
+        e.g. `{"data": {"project_uuid": "..."}}`.
+    Unwrap rule: if the body is an object whose *only* key is `data`, use
+    `data`'s value; otherwise use the body as-is. The schemas below describe the
+    *unwrapped* (production) shape only.
+
+    **Loosely-typed responses.** ai-tools, enhance, copilot, finalize and the
+    single-I2I-link endpoints return open shapes (the server may add fields and
+    `version_id` is intentionally untyped). Their schemas set
+    `additionalProperties: true` and SHOULD NOT be tightened by clients.
+
+    **File bytes never transit this API.** Upload/download endpoints hand out
+    presigned S3 URLs; clients PUT/GET bytes directly to/from storage.
+servers:
+  - url: https://api.imagen-ai.com/v1
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Regular projects
+  - name: Enhancement
+  - name: I2I projects
+  - name: Discovery
+
+paths:
+  # ---------------------------------------------------------------- Discovery
+  /profiles:
+    get:
+      tags: [Discovery]
+      summary: List profiles
+      responses:
+        "200":
+          description: A list of profiles (bare list in prod; `{data:{profiles:[…]}}` legacy).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Profile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/sky_replacement/templates:
+    get:
+      tags: [Discovery]
+      summary: List sky-replacement templates
+      responses:
+        "200":
+          description: Sky templates; use `id` for EditOptions.sky_replacement_template_id.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SkyTemplate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # --------------------------------------------------------- Regular projects
+  /projects/:
+    post:
+      tags: [Regular projects]
+      summary: Create project
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProjectRequest" }
+      responses:
+        "200":
+          description: Created project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateProjectResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects:
+    get:
+      tags: [Regular projects]
+      summary: List projects (paginated)
+      parameters:
+        - { $ref: "#/components/parameters/Size" }
+        - { $ref: "#/components/parameters/Page" }
+        - name: client_type
+          in: query
+          schema: { type: string }
+        - name: is_archived
+          in: query
+          schema: { type: boolean }
+        - name: get_thumbnail
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Page of projects with pagination metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}:
+    get:
+      tags: [Regular projects]
+      summary: Get one project
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - name: get_thumbnail
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: A single project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectListItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{name}/uuid:
+    get:
+      tags: [Regular projects]
+      summary: Resolve project name to UUID
+      description: Tolerates a bare string, `{project_uuid}`, or `{uuid}` response shapes.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The project UUID.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: string
+                  - type: object
+                    additionalProperties: true
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/get_temporary_upload_links:
+    post:
+      tags: [Regular projects]
+      summary: Get presigned upload links
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadLinksRequest" }
+      responses:
+        "200":
+          description: Presigned upload links per file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadLinksResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/edit:
+    post:
+      tags: [Regular projects]
+      summary: Start editing
+      description: |
+        Quirk: send an explicitly empty `Content-Type: ""` header — the API
+        rejects the default JSON content type on this endpoint.
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/edit/status:
+    get:
+      tags: [Regular projects]
+      summary: Poll edit status
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      responses:
+        "200": { $ref: "#/components/responses/Status" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/edit/get_temporary_download_links:
+    get:
+      tags: [Regular projects]
+      summary: Get XMP download links
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      responses:
+        "200": { $ref: "#/components/responses/DownloadLinks" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/export:
+    post:
+      tags: [Regular projects]
+      summary: Start export to JPEG
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/export/status:
+    get:
+      tags: [Regular projects]
+      summary: Poll export status
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      responses:
+        "200": { $ref: "#/components/responses/Status" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/export/get_temporary_download_links:
+    get:
+      tags: [Regular projects]
+      summary: Get JPEG export download links
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      responses:
+        "200": { $ref: "#/components/responses/DownloadLinks" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/export/get_upload_link:
+    get:
+      tags: [Regular projects]
+      summary: Per-image export upload link
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FileNameQuery" }
+      responses:
+        "200": { $ref: "#/components/responses/SingleUploadLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/export/get_download_link:
+    get:
+      tags: [Regular projects]
+      summary: Per-image export download link
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FileNameQuery" }
+      responses:
+        "200": { $ref: "#/components/responses/SingleDownloadLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ----------------------------------- Enhancement / Copilot / Finalize
+  /projects/{uuid}/ai-tools:
+    get:
+      tags: [Enhancement]
+      summary: List AI tools
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/ProjectSourceQuery" }
+      responses:
+        "200":
+          description: Available AI tools. Open shape; extra fields preserved.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  prompts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                      properties:
+                        enhancement_type: { type: string }
+                        label: { type: string }
+                        enabled_for_batch: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/images/{filename}/enhance:
+    post:
+      tags: [Enhancement]
+      summary: Apply a quick AI tool to one image
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FilenamePath" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnhanceRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/EnhanceResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/images/{filename}/copilot:
+    post:
+      tags: [Enhancement]
+      summary: Apply a natural-language instruction to one image
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FilenamePath" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CopilotRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/EnhanceResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [Enhancement]
+      summary: Reset copilot conversation history for one image
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FilenamePath" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectSourceBody" }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "204": { description: "Reset succeeded, no content." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /projects/{uuid}/finalize:
+    post:
+      tags: [Enhancement]
+      summary: Finalize project (generate final download URLs, upscale enhanced images)
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectSourceBody" }
+      responses:
+        "200": { $ref: "#/components/responses/DownloadLinks" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # -------------------------------------------------------------- I2I projects
+  /i2i/projects/:
+    post:
+      tags: [I2I projects]
+      summary: Create I2I project
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProjectRequest" }
+      responses:
+        "200":
+          description: Created I2I project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateProjectResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects:
+    get:
+      tags: [I2I projects]
+      summary: List I2I projects (paginated)
+      parameters:
+        - { $ref: "#/components/parameters/Size" }
+        - { $ref: "#/components/parameters/Page" }
+        - name: is_archived
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Page of I2I projects.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/is_valid_name:
+    get:
+      tags: [I2I projects]
+      summary: Validate an I2I project name
+      description: A 2xx with no explicit flag is treated as valid.
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Validity result.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: boolean
+                  - type: object
+                    additionalProperties: true
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}:
+    get:
+      tags: [I2I projects]
+      summary: Get one I2I project
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - name: get_thumbnail
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: A single I2I project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectListItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/get_temporary_upload_links:
+    post:
+      tags: [I2I projects]
+      summary: Get presigned upload links (batched small files)
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/UploadLinksRequest" }
+                - type: object
+                  properties:
+                    client_type: { type: string, default: API }
+      responses:
+        "200": { $ref: "#/components/responses/UploadLinks" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/get_upload_link:
+    get:
+      tags: [I2I projects]
+      summary: Single presigned upload link (advanced)
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FileNameQuery" }
+      responses:
+        "200": { $ref: "#/components/responses/SingleUploadLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/multipart_uploads:
+    post:
+      tags: [I2I projects]
+      summary: Create an S3 multipart upload
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name, part_count]
+              properties:
+                file_name: { type: string }
+                part_count: { type: integer, minimum: 1, maximum: 10000 }
+      responses:
+        "200":
+          description: Multipart upload handle and per-part presigned URLs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MultipartUploadResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/multipart_uploads/{upload_id}/complete:
+    post:
+      tags: [I2I projects]
+      summary: Complete an S3 multipart upload
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/UploadId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name]
+              properties:
+                file_name: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "204": { description: "Completed, no content." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/multipart_uploads/{upload_id}:
+    delete:
+      tags: [I2I projects]
+      summary: Abort an S3 multipart upload
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/UploadId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "204": { description: "Aborted, no content." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/edit:
+    post:
+      tags: [I2I projects]
+      summary: Trigger I2I editing (no status endpoint)
+      description: |
+        Returns immediately. There is no status endpoint — detect completion via
+        the `callback_url` webhook or by polling the download-links endpoint until
+        it returns a non-empty list.
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/I2IEditOptions" }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/get_temporary_download_links:
+    get:
+      tags: [I2I projects]
+      summary: Get all I2I download links
+      parameters: [{ $ref: "#/components/parameters/Uuid" }]
+      responses:
+        "200": { $ref: "#/components/responses/DownloadLinks" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /i2i/projects/{uuid}/get_download_link:
+    get:
+      tags: [I2I projects]
+      summary: Single I2I download link
+      parameters:
+        - { $ref: "#/components/parameters/Uuid" }
+        - { $ref: "#/components/parameters/FileNameQuery" }
+      responses:
+        "200": { $ref: "#/components/responses/SingleDownloadLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+
+  parameters:
+    Uuid:
+      name: uuid
+      in: path
+      required: true
+      schema: { type: string }
+    UploadId:
+      name: upload_id
+      in: path
+      required: true
+      schema: { type: string }
+    FilenamePath:
+      name: filename
+      in: path
+      required: true
+      schema: { type: string }
+    FileNameQuery:
+      name: file_name
+      in: query
+      required: true
+      schema: { type: string }
+    ProjectSourceQuery:
+      name: project_source
+      in: query
+      required: true
+      schema: { $ref: "#/components/schemas/ProjectSource" }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+
+  responses:
+    Unauthorized:
+      description: Invalid API key or unauthorized.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadRequest:
+      description: |
+        Validation or gating error (e.g. "Project has not been exported yet." or
+        "Only realistic editing requests are supported.").
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Message:
+      description: A simple message acknowledgement.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/MessageResponse" }
+    Status:
+      description: Operation status.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/StatusDetails" }
+    DownloadLinks:
+      description: A list of files with download links.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/DownloadLinksList" }
+    UploadLinks:
+      description: Presigned upload links per file.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/UploadLinksResponse" }
+    SingleUploadLink:
+      description: A single presigned upload link.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/SingleUploadLink" }
+    SingleDownloadLink:
+      description: A single download link.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/SingleDownloadLink" }
+    EnhanceResult:
+      description: |
+        Enhancement/copilot result. Open shape; `version_id` is intentionally
+        untyped (server declares it as an open optional field).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/EnhanceResult" }
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: true
+      properties:
+        error:
+          type: object
+          additionalProperties: true
+          properties:
+            message: { type: string }
+        detail: { type: string }
+
+    Profile:
+      type: object
+      additionalProperties: true
+      required: [profile_key]
+      properties:
+        image_type:
+          type: string
+          enum: [RAW, JPG]
+        profile_key: { type: integer }
+        profile_name: { type: string }
+        profile_type: { type: string }
+
+    SkyTemplate:
+      type: object
+      additionalProperties: true
+      required: [id]
+      properties:
+        id: { type: integer }
+        is_default: { type: boolean }
+
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Unique per account; omit for a server-generated UUID.
+
+    CreateProjectResponse:
+      type: object
+      additionalProperties: true
+      required: [project_uuid]
+      properties:
+        project_uuid: { type: string }
+
+    ProjectListItem:
+      type: object
+      additionalProperties: true
+      properties:
+        project_uuid: { type: string }
+        name: { type: string }
+
+    Pagination:
+      type: object
+      additionalProperties: true
+      properties:
+        total: { type: integer }
+        size: { type: integer }
+        page: { type: integer }
+
+    ProjectListResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        projects:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectListItem" }
+        pagination: { $ref: "#/components/schemas/Pagination" }
+
+    FileUploadInfo:
+      type: object
+      required: [file_name]
+      properties:
+        file_name: { type: string }
+        md5:
+          type: string
+          description: Base64-encoded MD5, sent only when MD5 calculation is enabled.
+
+    UploadLinksRequest:
+      type: object
+      required: [files_list]
+      properties:
+        files_list:
+          type: array
+          items: { $ref: "#/components/schemas/FileUploadInfo" }
+
+    UploadLinksResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        files_list:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              file_name: { type: string }
+              upload_link: { type: string, format: uri }
+
+    SingleUploadLink:
+      type: object
+      additionalProperties: true
+      properties:
+        upload_link: { type: string, format: uri }
+
+    SingleDownloadLink:
+      type: object
+      additionalProperties: true
+      properties:
+        download_link: { type: string, format: uri }
+
+    DownloadLinksList:
+      type: object
+      additionalProperties: true
+      properties:
+        files_list:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              file_name: { type: string }
+              download_link: { type: string, format: uri }
+
+    MessageResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        message: { type: string }
+
+    StatusDetails:
+      type: object
+      additionalProperties: true
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: Terminal values are `Completed` and `Failed`; any other value means keep polling.
+        progress: { type: number }
+        details: { type: string }
+
+    ProjectSource:
+      type: string
+      enum: [REGULAR, I2I]
+
+    ProjectSourceBody:
+      type: object
+      required: [project_source]
+      properties:
+        project_source: { $ref: "#/components/schemas/ProjectSource" }
+
+    EditOptions:
+      type: object
+      description: |
+        Mutual-exclusivity (enforced client-side): at most one crop mode
+        (crop | headshot_crop | portrait_crop) and at most one straightening mode
+        (straighten | perspective_correction). Null fields are omitted from the payload.
+      properties:
+        crop: { type: boolean }
+        straighten: { type: boolean }
+        hdr_merge: { type: boolean }
+        portrait_crop: { type: boolean }
+        smooth_skin: { type: boolean }
+        subject_mask: { type: boolean }
+        headshot_crop: { type: boolean }
+        perspective_correction: { type: boolean }
+        sky_replacement: { type: boolean }
+        sky_replacement_template_id: { type: integer }
+        window_pull: { type: boolean }
+        crop_aspect_ratio: { type: string }
+        callback_url: { type: string, format: uri }
+        hdr_output_compression:
+          type: string
+          enum: [LOSSY, LOSSLESS]
+
+    EditRequest:
+      allOf:
+        - type: object
+          required: [profile_key]
+          properties:
+            profile_key: { type: integer }
+            photography_type: { type: string }
+        - { $ref: "#/components/schemas/EditOptions" }
+
+    I2IEditOptions:
+      type: object
+      properties:
+        hdr_merge: { type: boolean }
+        sky_replacement: { type: boolean }
+        sky_replacement_template_id: { type: integer }
+        perspective_correction: { type: boolean }
+        callback_url: { type: string, format: uri }
+
+    EnhanceRequest:
+      type: object
+      required: [tool_id, project_source]
+      properties:
+        tool_id:
+          type: string
+          description: A tool's `enhancement_type` from the ai-tools listing.
+        parent_version_id:
+          description: Build a new version on top of a prior one; omit to start from the base edited image.
+        project_source: { $ref: "#/components/schemas/ProjectSource" }
+
+    CopilotRequest:
+      type: object
+      required: [instruction, project_source]
+      properties:
+        instruction:
+          type: string
+          minLength: 1
+          maxLength: 255
+        parent_version_id:
+          description: Build on a prior version; omit to start from the base edited image.
+        project_source: { $ref: "#/components/schemas/ProjectSource" }
+
+    EnhanceResult:
+      type: object
+      additionalProperties: true
+      properties:
+        status: { type: string }
+        version_id:
+          description: Intentionally untyped (open optional field), nullable.
+        enhanced_image_url: { type: string, format: uri }
+
+    MultipartUploadResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        upload_id: { type: string }
+        key: { type: string }
+        parts:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              part_number: { type: integer }
+              upload_url: { type: string, format: uri }
