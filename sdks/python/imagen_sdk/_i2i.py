@@ -13,8 +13,8 @@ Adds the full ``/v1/i2i/...`` project family:
 - multipart upload primitives for large files: create / complete / abort, plus the
   high-level upload_i2i_file_multipart helper (used by upload_i2i_images, also public
   as an advanced escape hatch)
-- start_i2i_editing (trigger only; there is no I2I status endpoint, completion is
-  signalled via callback_url or by download links becoming available)
+- start_i2i_editing (trigger only) + wait_for_i2i_completion (polls project status
+  until Completed/Failed); completion can also be signalled via callback_url
 - get_i2i_download_links / get_i2i_download_link / get_i2i_upload_link
 """
 
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -391,11 +392,10 @@ class I2IMixin(_CoreClientMixin):
         """
         Trigger image-to-image editing for a project.
 
-        Unlike the standard edit flow, the I2I API exposes no status endpoint, so this
-        method only triggers the edit and returns immediately. Completion is signalled
-        via ``callback_url`` (if provided in ``edit_options``) or by polling
-        ``get_i2i_download_links`` until links are available (it returns
-        ``400 "...status In Progress."`` while the edit is still running).
+        This only triggers the edit and returns immediately. To wait for completion,
+        either provide a ``callback_url`` in ``edit_options`` or call
+        :meth:`wait_for_i2i_completion`, which polls the project status until it
+        reaches ``Completed`` or ``Failed``.
 
         Args:
             project_uuid: UUID of the I2I project.
@@ -416,6 +416,55 @@ class I2IMixin(_CoreClientMixin):
             json=edit_data,
         )
         return self._parse_model(response_json, MessageResponse, "I2I edit trigger response", ProjectError)
+
+    async def wait_for_i2i_completion(
+        self,
+        project_uuid: str,
+        poll_interval: float = 10.0,
+        max_wait_time: float = 72000.0,
+    ) -> ProjectListItem:
+        """
+        Poll an I2I project's status until editing completes or fails.
+
+        Unlike the classic edit flow (which has a dedicated ``/edit/status`` endpoint),
+        I2I exposes its status on the project object itself: ``GET /v1/i2i/projects/{uuid}``
+        returns a ``status`` of ``Pending`` -> ``In Progress`` -> ``Completed``/``Failed``.
+        This polls that endpoint with exponential backoff, mirroring
+        ``ImagenClient._wait_for_completion`` for the standard flow.
+
+        Args:
+            project_uuid: UUID of the I2I project (call after ``start_i2i_editing``).
+            poll_interval: Initial seconds between status checks (backs off to 60s).
+            max_wait_time: Maximum total seconds to wait before raising (default 20h).
+
+        Returns:
+            The final ``ProjectListItem`` once status is ``Completed``.
+
+        Raises:
+            ProjectError: If editing fails (``Failed``) or the wait times out.
+        """
+        check_interval, max_interval = poll_interval, 60.0
+        start_time = time.monotonic()
+
+        self._logger.info(f"⏳ Waiting for I2I editing of {project_uuid} to complete...")
+
+        while True:
+            elapsed = time.monotonic() - start_time
+            if elapsed > max_wait_time:
+                raise ProjectError(f"I2I editing timed out after {max_wait_time} seconds")
+
+            project = await self.get_i2i_project(project_uuid, get_thumbnail=False)
+            self._logger.info(f"  - Status: {project.status} (elapsed: {int(elapsed)}s)")
+
+            if project.status == "Completed":
+                self._logger.info("✅ I2I editing completed successfully!")
+                return project
+
+            if project.status == "Failed":
+                raise ProjectError(f"I2I editing failed for project {project_uuid}.")
+
+            await asyncio.sleep(check_interval)
+            check_interval = min(check_interval * 1.2, max_interval)
 
     async def get_i2i_download_links(self, project_uuid: str) -> list[str]:
         """

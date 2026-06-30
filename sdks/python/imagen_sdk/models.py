@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .enums import ClientType, DNGCompression, ProjectSource
+from .enums import DNGCompression, ProjectSource
 
 
 class Profile(BaseModel):
@@ -323,7 +323,7 @@ class SingleDownloadLink(BaseModel):
 
 class CreateFilesUploadLinksRequest(BaseModel):
     files_list: list[FileUploadInfo] = Field(..., description="Files to obtain upload links for")
-    client_type: ClientType = Field(ClientType.API, description="Client type for the upload request")
+    client_type: str = Field("API", description="Client type for the upload request")
 
     def to_api_dict(self) -> dict[str, Any]:
         return self.model_dump(exclude_none=True, mode="json")

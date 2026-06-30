@@ -5,7 +5,7 @@ Multi-language SDK monorepo for the [Imagen AI](https://imagen-ai.com) photo-edi
 | Language | Location | Install |
 |----------|----------|---------|
 | Python | [`sdks/python/`](sdks/python/) | `pip install imagen-ai-sdk` |
-| Node / TypeScript | `sdks/node/` _(planned)_ | — |
+| Node / TypeScript | [`sdks/node/`](sdks/node/) | `npm install imagen-ai-sdk` |
 
 See each SDK's own README for full usage and examples.
 
@@ -13,8 +13,10 @@ See each SDK's own README for full usage and examples.
 
 ```
 sdks/python/     Python SDK (published to PyPI)
+sdks/node/       Node / TypeScript SDK (published to npm)
 docs/            Shared docs — incl. WORKFLOWS.md, the language-neutral
                  behavioral contract every SDK implements
+spec/            Reference OpenAPI 3.1 contract (spec/openapi.yaml)
 ```
 
 Each SDK is self-contained and released independently to its own registry

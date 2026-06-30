@@ -37,12 +37,3 @@ class ProjectSource(Enum):
 
     REGULAR = "REGULAR"
     I2I = "I2I"
-
-
-class ClientType(Enum):
-    """Client type used when creating projects / upload links (from API spec)."""
-
-    APP = "APP"
-    API = "API"
-    MOBILE = "MOBILE"
-    WEB_REAL_ESTATE = "WEB_REAL_ESTATE"

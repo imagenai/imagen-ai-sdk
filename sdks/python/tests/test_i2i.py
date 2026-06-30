@@ -5,7 +5,23 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from imagen_sdk import I2IEditOptions, MultipartUploadLinksResponse, ProjectError, UploadError
+from imagen_sdk import (
+    I2IEditOptions,
+    MultipartUploadLinksResponse,
+    ProjectError,
+    ProjectListItem,
+    UploadError,
+)
+
+
+def _i2i_project(status: str) -> ProjectListItem:
+    return ProjectListItem(
+        project_uuid="proj",
+        status=status,
+        created_at="2026-06-01T00:00:00Z",
+        number_of_images=1,
+        customer_reference_id=1,
+    )
 
 
 class TestI2IProjectLifecycle:
@@ -62,6 +78,19 @@ class TestI2IEditingAndDownloads:
             await client.start_i2i_editing("proj")
             _, kwargs = client._make_request.call_args
             assert kwargs["json"] == {}
+
+    @pytest.mark.asyncio
+    async def test_wait_for_i2i_completion_polls_until_completed(self, client):
+        client.get_i2i_project = AsyncMock(side_effect=[_i2i_project("In Progress"), _i2i_project("Completed")])
+        result = await client.wait_for_i2i_completion("proj", poll_interval=0.01)
+        assert result.status == "Completed"
+        assert client.get_i2i_project.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_wait_for_i2i_completion_raises_on_failed(self, client):
+        client.get_i2i_project = AsyncMock(return_value=_i2i_project("Failed"))
+        with pytest.raises(ProjectError, match="failed"):
+            await client.wait_for_i2i_completion("proj", poll_interval=0.01)
 
     @pytest.mark.asyncio
     async def test_get_i2i_download_links(self, client, mock_request_factory):

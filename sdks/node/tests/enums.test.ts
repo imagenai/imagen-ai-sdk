@@ -12,11 +12,12 @@ describe("PhotographyType enum", () => {
     expect(PhotographyType.SPORTS).toBe("SPORTS");
     expect(PhotographyType.NO_TYPE).toBe("NO_TYPE");
     expect(PhotographyType.OTHER).toBe("OTHER");
+    expect(PhotographyType.SCHOOL).toBe("SCHOOL");
   });
 
-  it("covers all 10 types", () => {
+  it("covers all 11 types", () => {
     const values = Object.values(PhotographyType);
-    expect(values).toHaveLength(10);
+    expect(values).toHaveLength(11);
   });
 });
 

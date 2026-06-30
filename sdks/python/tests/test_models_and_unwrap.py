@@ -3,7 +3,6 @@
 import pytest
 
 from imagen_sdk import (
-    ClientType,
     CopilotRequest,
     DNGCompression,
     EditOptions,
@@ -46,9 +45,6 @@ class TestEnumAdditions:
 
     def test_project_source_values(self):
         assert {s.value for s in ProjectSource} == {"REGULAR", "I2I"}
-
-    def test_client_type_values(self):
-        assert {c.value for c in ClientType} == {"APP", "API", "MOBILE", "WEB_REAL_ESTATE"}
 
 
 class TestEditOptionsNewFields:

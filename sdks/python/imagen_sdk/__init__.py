@@ -59,7 +59,6 @@ One-Line Usage:
 """
 
 from .enums import (
-    ClientType,
     CropAspectRatio,
     DNGCompression,
     PhotographyType,
@@ -190,7 +189,6 @@ __all__ = [
     "CropAspectRatio",
     "DNGCompression",
     "ProjectSource",
-    "ClientType",
     # Convenience functions
     "quick_edit",
     "get_profiles",

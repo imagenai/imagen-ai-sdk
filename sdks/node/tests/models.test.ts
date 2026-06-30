@@ -1,10 +1,11 @@
 import {
   ProfileSchema,
   ProjectCreationResponseSchema,
-  PresignedUrlResponseSchema,
   StatusResponseSchema,
   DownloadLinksResponseSchema,
+  DownloadFilesListSchema,
   EditOptionsSchema,
+  unwrap,
 } from "../src/models";
 
 describe("ProfileSchema", () => {
@@ -104,5 +105,31 @@ describe("DownloadLinksResponseSchema", () => {
     const result = DownloadLinksResponseSchema.parse(raw);
     expect(result.data.files_list[0]?.fileName).toBe("photo.xmp");
     expect(result.data.files_list[0]?.downloadLink).toBe("https://s3.example.com/photo.xmp");
+  });
+});
+
+describe("unwrap (dual-envelope support)", () => {
+  const rootShape = {
+    files_list: [{ file_name: "photo.xmp", download_link: "https://s3.example.com/photo.xmp" }],
+  };
+
+  it("strips a sole `data` envelope (beta shape)", () => {
+    expect(unwrap({ data: rootShape })).toEqual(rootShape);
+  });
+
+  it("passes through root-shape payloads unchanged (prod shape)", () => {
+    expect(unwrap(rootShape)).toEqual(rootShape);
+  });
+
+  it("does not unwrap when other keys sit beside `data`", () => {
+    const payload = { data: rootShape, extra: 1 };
+    expect(unwrap(payload)).toEqual(payload);
+  });
+
+  it("inner schema validates both prod and beta shapes after unwrap", () => {
+    const prod = DownloadFilesListSchema.parse(unwrap(rootShape));
+    const beta = DownloadFilesListSchema.parse(unwrap({ data: rootShape }));
+    expect(prod.files_list[0]?.downloadLink).toBe("https://s3.example.com/photo.xmp");
+    expect(beta).toEqual(prod);
   });
 });

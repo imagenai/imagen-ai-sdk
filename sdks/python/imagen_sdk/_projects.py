@@ -12,7 +12,6 @@ part of the original SDK surface:
 from __future__ import annotations
 
 from ._core import _CoreClientMixin
-from .enums import ClientType
 from .exceptions import ImagenError, ProjectError
 from .models import (
     FileDownloadInfo,
@@ -31,7 +30,6 @@ class ProjectManagementMixin(_CoreClientMixin):
         self,
         size: int = 20,
         page: int = 0,
-        client_type: ClientType = ClientType.API,
         is_archived: bool | None = False,
         get_thumbnail: bool = True,
     ) -> ProjectListResponse:
@@ -41,7 +39,6 @@ class ProjectManagementMixin(_CoreClientMixin):
         Args:
             size: Page size (1-100, default 20).
             page: Zero-based page index (default 0).
-            client_type: Client type filter (default API).
             is_archived: Filter by archived state, or None for all (default False).
             get_thumbnail: Whether to include thumbnail URLs (default True).
 
@@ -58,7 +55,7 @@ class ProjectManagementMixin(_CoreClientMixin):
         params: dict[str, object] = {
             "size": size,
             "page": page,
-            "client_type": client_type.value,
+            "client_type": "API",
             "get_thumbnail": get_thumbnail,
         }
         if is_archived is not None:

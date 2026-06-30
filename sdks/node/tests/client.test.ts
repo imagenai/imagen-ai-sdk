@@ -85,6 +85,36 @@ describe("ImagenClient._makeRequest", () => {
     ).rejects.toThrow("API Error (500): Internal server error");
   });
 
+  it("extracts prod-shape { error: { message } } over statusText", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 400,
+      ok: false,
+      json: async () => ({ error: { message: "Only realistic editing requests are supported" } }),
+      statusText: "Bad Request",
+      text: async () => "Bad Request",
+    } as unknown as Response);
+
+    await expect(
+      (client as unknown as { _makeRequest: (m: string, e: string) => Promise<unknown> })
+        ._makeRequest("POST", "/test")
+    ).rejects.toThrow("API Error (400): Only realistic editing requests are supported");
+  });
+
+  it("extracts a string `error` field", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 400,
+      ok: false,
+      json: async () => ({ error: "something broke" }),
+      statusText: "Bad Request",
+      text: async () => "Bad Request",
+    } as unknown as Response);
+
+    await expect(
+      (client as unknown as { _makeRequest: (m: string, e: string) => Promise<unknown> })
+        ._makeRequest("POST", "/test")
+    ).rejects.toThrow("API Error (400): something broke");
+  });
+
   it("throws ImagenError on 400 when JSON parse fails (uses statusText)", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       status: 400,

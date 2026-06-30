@@ -2,5 +2,8 @@ export * from "./errors.js";
 export * from "./enums.js";
 export * from "./models.js";
 export * from "./utils.js";
+export * from "./_projects.js";
+export * from "./_enhancement.js";
+export * from "./_i2i.js";
 export * from "./client.js";
 export * from "./convenience.js";

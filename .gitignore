@@ -52,6 +52,10 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+graphify-out
+e2e_i2i_output
+.agents
+.claude
 
 # Translations
 *.mo
