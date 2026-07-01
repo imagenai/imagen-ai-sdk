@@ -1,6 +1,6 @@
 {
   "name": "imagen-ai-sdk",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Node.js/TypeScript SDK for the Imagen AI photo editing workflow",
   "author": "Shahar Polak <shahar@imagen-ai.com>",
   "license": "MIT",
@@ -15,7 +15,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/imagenai/imagen-ai-node-sdk"
+    "url": "git+https://github.com/imagenai/imagen-ai-sdk.git",
+    "directory": "sdks/node"
+  },
+  "homepage": "https://github.com/imagenai/imagen-ai-sdk/tree/master/sdks/node",
+  "bugs": {
+    "url": "https://github.com/imagenai/imagen-ai-sdk/issues"
   },
   "engines": {
     "node": ">=18.0.0"
