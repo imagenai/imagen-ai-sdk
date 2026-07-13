@@ -1,0 +1,91 @@
+name: CI
+
+# Lint + test SDKs, each gated on whether its own subtree changed, so a
+# Python-only PR doesn't run Node CI and vice versa. Path filtering is done with
+# dorny/paths-filter because GitHub's native `on.paths` can't apply different
+# filters to different jobs in one workflow.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      node: ${{ steps.filter.outputs.node }}
+      go: ${{ steps.filter.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'sdks/python/**'
+              - '.github/workflows/ci.yml'
+            node:
+              - 'sdks/node/**'
+              - '.github/workflows/ci.yml'
+            go:
+              - 'sdks/go/**'
+              - '.github/workflows/ci.yml'
+
+  python:
+    needs: changes
+    if: ${{ needs.changes.outputs.python == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/python
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check imagen_sdk/
+      - run: pytest
+
+  node:
+    needs: changes
+    if: ${{ needs.changes.outputs.node == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/node
+    strategy:
+      matrix:
+        node-version: ["18", "20"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: sdks/node/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+  go:
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Run Tests
+        run: go test -v -race ./...

@@ -191,3 +191,9 @@ downloads/
 # Eval / benchmark scratch workspace
 imagen-cli-workspace/
 CLAUDE.md
+# Code-orchestrator scratch (Codex reports)
+.code-orchestrator/
+
+# Go e2e output artifacts
+e2e_go_output/
+e2e_go_i2i_output/
