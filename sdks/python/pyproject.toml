@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imagen-ai-sdk"
-version = "1.1.0"
+version = "1.1.1"
 description = "A robust, Pydantic-powered SDK for the Imagen AI photo editing workflow"
 authors = [{name = "Shahar Polak", email = "shahar@imagen-ai.com"}]
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.7"
-keywords = ["imagen", "ai", "photo", "editing", "automation", "photography"]
+keywords = ["imagen", "ai", "photo", "editing", "photography", "sdk"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -53,8 +53,8 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imagenai/imagen-ai-sdk"
-Documentation = "https://support.imagen-ai.com/hc/en-us/articles/19137253415965-Automate-your-post-production-workflow-with-Imagen-API"
+Homepage = "https://imagen-ai.com"
+Documentation = "https://api-docs.imagen-ai.com"
 Repository = "https://github.com/imagenai/imagen-ai-sdk"
 "Bug Reports" = "https://github.com/imagenai/imagen-ai-sdk/issues"
 
