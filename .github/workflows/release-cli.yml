@@ -4,6 +4,10 @@ name: Release CLI
 # platform and attaches them to a GitHub release. Asset names match what
 # sdks/python/packaging/install.sh downloads.
 #
+# Runs on Blacksmith runners (faster/cheaper). Targets: macOS Apple Silicon,
+# Linux x64, Linux arm64, Windows x64. Intel macOS is intentionally not built
+# (Blacksmith has no Intel macOS runner; Intel-Mac users can pip install).
+#
 # Gated on a deliberate `cli-v*` tag so merging to master never publishes.
 # Tests must pass before any binary is built.
 
@@ -19,7 +23,7 @@ defaults:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,15 +39,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14      # Apple Silicon
+          - runner: blacksmith-6vcpu-macos-15   # Apple Silicon (no Intel macOS)
             asset: imagen-macos-arm64
-          - runner: macos-13      # Intel
-            asset: imagen-macos-x64
-          - runner: ubuntu-latest
+          - runner: blacksmith-4vcpu-ubuntu-2404
             asset: imagen-linux-x64
-          - runner: ubuntu-24.04-arm
+          - runner: blacksmith-4vcpu-ubuntu-2404-arm
             asset: imagen-linux-arm64
-          - runner: windows-latest
+          - runner: blacksmith-4vcpu-windows-2025
             asset: imagen-windows-x64.exe
     runs-on: ${{ matrix.runner }}
     steps:
@@ -73,7 +75,7 @@ jobs:
     # Only publish a release for an actual cli-v* tag. A manual workflow_dispatch
     # run still builds the binaries (for testing) but does not create a release.
     if: startsWith(github.ref, 'refs/tags/cli-v')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
