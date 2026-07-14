@@ -26,7 +26,19 @@ imagen --version
 ```
 
 > **Developing from source?** `pip install -e sdks/python` also installs the
-> `imagen` command (this is what the test suite uses).
+> `imagen` command tracking your live source (no rebuild needed) — this is what
+> the test suite uses.
+>
+> **Rebuilding the standalone binary?** The binary is compiled from the SDK
+> source, so it only reflects changes after a rebuild. Run the single build
+> script (same one CI uses, so local and released binaries match):
+>
+> ```bash
+> pip install pyinstaller
+> sh sdks/python/packaging/build.sh   # -> sdks/python/dist/imagen
+> ```
+>
+> Released binaries are rebuilt automatically by CI on every `cli-v*` tag.
 
 ---
 

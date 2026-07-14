@@ -53,7 +53,8 @@ jobs:
           python-version: "3.11"
       - run: pip install -e . pyinstaller
       - name: Build binary
-        run: pyinstaller --onefile --name imagen --clean --noconfirm --paths . --collect-submodules imagen_sdk packaging/imagen_entry.py
+        shell: bash
+        run: sh packaging/build.sh
       - name: Rename to asset name
         shell: bash
         run: |
