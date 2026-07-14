@@ -18,14 +18,16 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, NoReturn, TypeVar
 
 import click
+from pydantic import BaseModel, ValidationError
 
 from . import __version__
 from .enums import PhotographyType
-from .exceptions import AuthenticationError, ImagenError
+from .exceptions import AuthenticationError, ImagenError, UploadError
 from .imagen_sdk import (
     DEFAULT_BASE_URL,
     JPG_EXTENSIONS,
@@ -55,8 +57,12 @@ def _load_config() -> dict[str, Any]:
 
 
 def _save_config(cfg: dict[str, Any]) -> None:
+    # Write atomically so a crash or a concurrent `imagen config` can't leave a
+    # truncated file that _load_config would then silently reset to {}.
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(cfg, indent=2) + "\n")
+    tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2) + "\n")
+    os.replace(tmp, CONFIG_PATH)
 
 
 # --------------------------------------------------------------------------- #
@@ -72,12 +78,16 @@ def _emit(ctx: dict[str, Any], data: Any, human: Callable[[Any], None]) -> None:
         human(data)
 
 
-def _fail(ctx: dict[str, Any], kind: str, message: str, code: int) -> NoReturn:
-    if ctx["json"]:
+def _emit_error(json_mode: bool, kind: str, message: str, code: int) -> NoReturn:
+    if json_mode:
         click.echo(json.dumps({"error": kind, "message": message}), err=True)
     else:
         click.secho(f"Error: {message}", fg="red", err=True)
     raise SystemExit(code)
+
+
+def _fail(ctx: dict[str, Any], kind: str, message: str, code: int) -> NoReturn:
+    _emit_error(ctx["json"], kind, message, code)
 
 
 def _run(ctx: dict[str, Any], coro: Any) -> Any:
@@ -107,10 +117,27 @@ def _dump(obj: Any) -> Any:
 
 
 def _resolve_api_key(ctx: dict[str, Any]) -> str:
-    key = ctx["api_key"] or os.environ.get("IMAGEN_API_KEY") or _load_config().get("api_key")
+    raw = ctx["api_key"] or os.environ.get("IMAGEN_API_KEY") or _load_config().get("api_key") or ""
+    key = raw.strip()
     if not key:
         _fail(ctx, "config", "No API key. Pass --api-key, set IMAGEN_API_KEY, or run `imagen config --api-key <key>`.", 2)
     return key
+
+
+_M = TypeVar("_M", bound=BaseModel)
+
+
+def _build_options(ctx: dict[str, Any], model: type[_M], flags: dict[str, Any]) -> _M:
+    """Construct an option model, mapping validation errors to a JSON `input` error.
+
+    Without this, e.g. `--crop --portrait-crop` (mutually exclusive) would raise an
+    uncaught ValidationError instead of honoring the CLI's JSON/exit-code contract.
+    """
+    try:
+        return model(**{k: v for k, v in flags.items() if v is not None})
+    except ValidationError as exc:
+        msg = "; ".join(e.get("msg", "") for e in exc.errors()) or str(exc)
+        _fail(ctx, "input", msg, 1)
 
 
 def _gather_images(ctx: dict[str, Any], path_str: str) -> list[Path]:
@@ -119,6 +146,8 @@ def _gather_images(ctx: dict[str, Any], path_str: str) -> list[Path]:
     if not path.exists():
         _fail(ctx, "input", f"Path does not exist: {path}", 1)
     if path.is_file():
+        if path.suffix.lower() not in SUPPORTED_FILE_FORMATS:
+            _fail(ctx, "input", f"Unsupported file type: {path.name}", 1)
         files = [path]
     else:
         files = sorted(f for f in path.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_FILE_FORMATS)
@@ -255,7 +284,7 @@ _PHOTO_TYPES = [t.value for t in PhotographyType]
 @click.option("--headshot-crop", is_flag=True, default=None)
 @click.option("--perspective-correction", is_flag=True, default=None)
 @click.option("--sky-replacement", is_flag=True, default=None)
-@click.option("--sky-template-id", type=int, default=None)
+@click.option("--sky-template-id", "sky_replacement_template_id", type=int, default=None)
 @click.option("--window-pull", is_flag=True, default=None)
 @click.option("--crop-aspect-ratio", default=None, help="e.g. 2X3, 4X5, 5X7.")
 @click.pass_obj
@@ -281,7 +310,7 @@ def edit(
         _fail(ctx, "config", "No profile. Pass --profile or run `imagen config --profile <key>`.", 2)
 
     images = _gather_images(ctx, folder)
-    edit_options = EditOptions(**{k: v for k, v in edit_flags.items() if v is not None})
+    edit_options = _build_options(ctx, EditOptions, edit_flags)
     ptype = PhotographyType(photo_type.upper()) if photo_type else None
 
     result = _run(
@@ -348,19 +377,21 @@ def enhance(ctx: dict[str, Any], project_uuid: str, filename: str, tool_id: str,
 @click.option("--download/--no-download", "download", default=True, show_default=True)
 @click.option("--hdr-merge", is_flag=True, default=None)
 @click.option("--sky-replacement", is_flag=True, default=None)
-@click.option("--sky-template-id", type=int, default=None)
+@click.option("--sky-template-id", "sky_replacement_template_id", type=int, default=None)
 @click.option("--perspective-correction", is_flag=True, default=None)
 @click.pass_obj
 def i2i(ctx: dict[str, Any], folder: str, project_name: str | None, download_dir: str, download: bool, **edit_flags: Any) -> None:
     """Run the image-to-image (i2i) editing workflow on a folder of photos."""
     key = _resolve_api_key(ctx)
     images = _gather_images(ctx, folder)
-    edit_options = I2IEditOptions(**{k: v for k, v in edit_flags.items() if v is not None})
+    edit_options = _build_options(ctx, I2IEditOptions, edit_flags)
 
     async def _do() -> dict[str, Any]:
         async with ImagenClient(key, ctx["base_url"]) as client:
             project_uuid = await client.create_i2i_project(project_name)
             summary = await client.upload_i2i_images(project_uuid, [str(p) for p in images])
+            if summary.successful == 0:
+                raise UploadError("No images uploaded successfully; not starting i2i editing.")
             await client.start_i2i_editing(project_uuid, edit_options)
             await client.wait_for_i2i_completion(project_uuid)
             links = await client.get_i2i_download_links(project_uuid)
@@ -420,7 +451,22 @@ def config(ctx: dict[str, Any], api_key: str | None, profile: int | None, base_u
 
 
 def main() -> None:
-    cli()
+    """Entry point that keeps Click parse errors inside the CLI's contract.
+
+    Click's own usage errors would otherwise print human text and exit 2 (which
+    we reserve for auth/config). We run non-standalone and normalize: usage/parse
+    errors become a JSON `input` error (in --json mode) with exit code 1. Errors
+    raised by commands themselves already exit via `_fail` and propagate here.
+    """
+    json_mode = "--json" in sys.argv[1:]
+    try:
+        code = cli.main(standalone_mode=False)
+    except (click.UsageError, click.ClickException) as exc:
+        _emit_error(json_mode, "input", exc.format_message(), 1)
+    except click.exceptions.Abort:
+        _emit_error(json_mode, "error", "Aborted.", 1)
+    else:
+        sys.exit(code or 0)
 
 
 if __name__ == "__main__":

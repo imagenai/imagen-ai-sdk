@@ -5,6 +5,7 @@ contract: JSON vs human output, exit codes, argument -> SDK mapping, and config.
 """
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -14,7 +15,28 @@ from click.testing import CliRunner
 from imagen_sdk import cli as cli_mod
 from imagen_sdk.cli import cli
 from imagen_sdk.enums import PhotographyType
-from imagen_sdk.models import Profile, QuickEditResult, UploadResult, UploadSummary
+from imagen_sdk.models import (
+    EnhanceResult,
+    PaginationInfo,
+    Profile,
+    ProjectListItem,
+    ProjectListResponse,
+    QuickEditResult,
+    SkyTemplate,
+    UploadResult,
+    UploadSummary,
+)
+
+
+def _client_cm(**method_returns):
+    """Build a mock that behaves as `async with ImagenClient(...) as client`."""
+    client = AsyncMock()
+    for name, value in method_returns.items():
+        getattr(client, name).return_value = value
+    cm = AsyncMock()
+    cm.__aenter__.return_value = client
+    return cm, client
+
 
 pytestmark = pytest.mark.unit
 
@@ -128,6 +150,134 @@ def test_config_masks_api_key(runner):
     # persisted on disk with the real value
     stored = json.loads(Path(cli_mod.CONFIG_PATH).read_text())
     assert stored["api_key"] == "SECRET"
+
+
+def test_edit_sky_template_id_maps_to_model_field(runner, tmp_path):
+    """Regression: --sky-template-id must reach EditOptions.sky_replacement_template_id."""
+    (tmp_path / "photo.jpg").touch()
+    fake = QuickEditResult(
+        project_uuid="u",
+        upload_summary=UploadSummary(total=1, successful=1, failed=0, results=[]),
+        download_links=[],
+    )
+    mock = AsyncMock(return_value=fake)
+    with patch.object(cli_mod, "quick_edit", mock):
+        result = runner.invoke(
+            cli,
+            ["--api-key", "k", "--json", "edit", str(tmp_path), "--profile", "1", "--sky-replacement", "--sky-template-id", "77"],
+        )
+    assert result.exit_code == 0, result.output
+    opts = mock.call_args.kwargs["edit_options"]
+    assert opts.sky_replacement_template_id == 77
+    assert opts.to_api_dict().get("sky_replacement_template_id") == 77
+
+
+def test_edit_mutually_exclusive_flags_json_error(runner, tmp_path):
+    (tmp_path / "photo.jpg").touch()
+    result = runner.invoke(
+        cli,
+        ["--api-key", "k", "--json", "edit", str(tmp_path), "--profile", "1", "--crop", "--portrait-crop"],
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error"] == "input"
+
+
+def test_edit_unsupported_single_file(runner, tmp_path):
+    f = tmp_path / "notes.txt"
+    f.touch()
+    result = runner.invoke(cli, ["--api-key", "k", "--json", "edit", str(f), "--profile", "1"])
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error"] == "input"
+
+
+def test_usage_error_is_json_and_exit_1(monkeypatch, capsys):
+    """Click's own parse errors must honor the JSON/exit-code contract (not exit 2).
+
+    Goes through main() (not CliRunner), since the normalization lives there.
+    """
+    monkeypatch.setattr(sys, "argv", ["imagen", "--api-key", "k", "--json", "enhance", "proj", "file"])
+    with pytest.raises(SystemExit) as se:
+        cli_mod.main()
+    assert se.value.code == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["error"] == "input"
+    assert "tool-id" in payload["message"]
+
+
+def test_whitespace_api_key_treated_as_missing(runner):
+    result = runner.invoke(cli, ["--api-key", "   ", "--json", "profiles"])
+    assert result.exit_code == 2
+    assert json.loads(result.output)["error"] == "config"
+
+
+def test_projects_json(runner):
+    resp = ProjectListResponse(
+        projects=[ProjectListItem(project_uuid="abc", status="Completed", created_at="t", number_of_images=3, customer_reference_id=100)],
+        pagination=PaginationInfo(total=1, size=20, page=0),
+    )
+    with patch.object(cli_mod, "list_projects", AsyncMock(return_value=resp)):
+        result = runner.invoke(cli, ["--api-key", "k", "--json", "projects"])
+    assert result.exit_code == 0
+    assert json.loads(result.output)["projects"][0]["project_uuid"] == "abc"
+
+
+def test_sky_templates_json(runner):
+    with patch.object(cli_mod, "get_sky_replacement_templates", AsyncMock(return_value=[SkyTemplate(id=3, is_default=True)])):
+        result = runner.invoke(cli, ["--api-key", "k", "--json", "sky-templates"])
+    assert result.exit_code == 0
+    assert json.loads(result.output)[0]["id"] == 3
+
+
+def test_ai_tools_json(runner):
+    from imagen_sdk.models import AIToolsResponse
+
+    with patch.object(cli_mod, "get_ai_tools", AsyncMock(return_value=AIToolsResponse(prompts=[]))):
+        result = runner.invoke(cli, ["--api-key", "k", "--json", "ai-tools", "proj-uuid"])
+    assert result.exit_code == 0
+    assert "prompts" in json.loads(result.output)
+
+
+def test_enhance_calls_client(runner):
+    cm, client = _client_cm(enhance_image=EnhanceResult(status="COMPLETED", enhanced_image_url="http://x/e.jpg"))
+    with patch.object(cli_mod, "ImagenClient", return_value=cm):
+        result = runner.invoke(cli, ["--api-key", "k", "--json", "enhance", "proj", "img.jpg", "--tool-id", "SHARPEN"])
+    assert result.exit_code == 0, result.output
+    client.enhance_image.assert_awaited_once()
+    args, kwargs = client.enhance_image.call_args
+    assert args[:3] == ("proj", "img.jpg", "SHARPEN")
+
+
+def test_i2i_happy_path(runner, tmp_path):
+    (tmp_path / "a.jpg").touch()
+    cm, client = _client_cm(
+        create_i2i_project="i2i-uuid",
+        upload_i2i_images=UploadSummary(total=1, successful=1, failed=0, results=[]),
+        get_i2i_download_links=["http://x/1"],
+        download_files=["/out/a.jpg"],
+    )
+    with patch.object(cli_mod, "ImagenClient", return_value=cm):
+        result = runner.invoke(cli, ["--api-key", "k", "--json", "i2i", str(tmp_path), "--out", "/out"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["project_uuid"] == "i2i-uuid"
+    client.start_i2i_editing.assert_awaited_once()
+
+
+def test_i2i_aborts_when_all_uploads_fail(runner, tmp_path):
+    (tmp_path / "a.jpg").touch()
+    cm, client = _client_cm(
+        create_i2i_project="i2i-uuid",
+        upload_i2i_images=UploadSummary(
+            total=1,
+            successful=0,
+            failed=1,
+            results=[UploadResult(file="a.jpg", success=False, error="boom")],
+        ),
+    )
+    with patch.object(cli_mod, "ImagenClient", return_value=cm):
+        result = runner.invoke(cli, ["--api-key", "k", "--json", "i2i", str(tmp_path)])
+    assert result.exit_code == 1
+    client.start_i2i_editing.assert_not_called()
 
 
 def test_config_value_used_as_fallback(runner):
