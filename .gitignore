@@ -34,7 +34,9 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-docs
+# Generated docs scratch (curated docs like WORKFLOWS.md / CLI.md stay tracked)
+docs/plans/
+docs/reports/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

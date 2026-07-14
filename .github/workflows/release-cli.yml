@@ -1,0 +1,86 @@
+name: Release CLI
+
+# Builds the standalone `imagen` binary (no Python needed by end users) for each
+# platform and attaches them to a GitHub release. Asset names match what
+# sdks/python/packaging/install.sh downloads.
+#
+# Gated on a deliberate `cli-v*` tag so merging to master never publishes.
+# Tests must pass before any binary is built.
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: sdks/python
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: python -m ruff check imagen_sdk/
+      - run: python -m pytest tests/ -q
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14      # Apple Silicon
+            asset: imagen-macos-arm64
+          - runner: macos-13      # Intel
+            asset: imagen-macos-x64
+          - runner: ubuntu-latest
+            asset: imagen-linux-x64
+          - runner: ubuntu-24.04-arm
+            asset: imagen-linux-arm64
+          - runner: windows-latest
+            asset: imagen-windows-x64.exe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e . pyinstaller
+      - name: Build binary
+        shell: bash
+        run: sh packaging/build.sh
+      - name: Rename to asset name
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/imagen.exe "dist/${{ matrix.asset }}"
+          else
+            mv dist/imagen "dist/${{ matrix.asset }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: sdks/python/dist/${{ matrix.asset }}
+
+  release:
+    needs: build
+    # Only publish a release for an actual cli-v* tag. A manual workflow_dispatch
+    # run still builds the binaries (for testing) but does not create a release.
+    if: startsWith(github.ref, 'refs/tags/cli-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*

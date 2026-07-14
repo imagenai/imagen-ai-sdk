@@ -10,6 +10,17 @@ Multi-language SDK monorepo for the [Imagen AI](https://imagen-ai.com) photo-edi
 
 See each SDK's own README for full usage and examples.
 
+## Command-line tool
+
+Prefer the terminal (or driving Imagen from an AI agent)? The **`imagen` CLI** is
+a single self-contained binary — no Python required — that wraps the full API
+with `--json` output and stable exit codes. See [`docs/CLI.md`](docs/CLI.md).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/imagenai/imagen-ai-sdk/master/sdks/python/packaging/install.sh | sh
+imagen edit ./raws --profile 328 --type wedding --crop
+```
+
 ## Repository layout
 
 ```
