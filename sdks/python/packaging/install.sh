@@ -23,6 +23,13 @@ case "$arch" in
   *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 
+# Intel macOS has no prebuilt binary (no Blacksmith Intel-macOS runner).
+if [ "$plat" = "macos" ] && [ "$a" = "x64" ]; then
+  echo "Intel macOS has no prebuilt binary. Install from source instead:" >&2
+  echo "  pip install imagen-ai-sdk    # provides the 'imagen' command" >&2
+  exit 1
+fi
+
 asset="imagen-${plat}-${a}"
 if [ "${IMAGEN_VERSION:-latest}" = "latest" ]; then
   url="https://github.com/${REPO}/releases/latest/download/${asset}"
