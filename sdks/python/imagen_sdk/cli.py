@@ -41,6 +41,7 @@ from .imagen_sdk import (
     quick_edit,
 )
 from .models import EditOptions, I2IEditOptions
+from .skill_text import INSTALL_PATHS, SKILLS
 
 CONFIG_PATH = Path.home() / ".imagen" / "config.json"
 
@@ -448,6 +449,31 @@ def config(ctx: dict[str, Any], api_key: str | None, profile: int | None, base_u
             click.echo(f"{k} = {val}")
 
     _emit(ctx, view, human)
+
+
+@cli.command()
+@click.option("--claude", "fmt", flag_value="claude", default=True, help="Target Claude Code's skills dir (default).")
+@click.option("--codex", "fmt", flag_value="codex", help="Target Codex's skills dir.")
+@click.option("--install", is_flag=True, help="Write the skill into the agent's skills dir instead of printing it.")
+@click.pass_obj
+def skill(ctx: dict[str, Any], fmt: str, install: bool) -> None:
+    """Print (or --install) the agent skill for driving this CLI.
+
+    The skill text is the same for both agents; `--claude` / `--codex` only pick
+    the install location. Pipe it into an agent's context, or `--install` it so
+    the agent auto-discovers it (`~/.claude/skills/…` or `~/.codex/skills/…`).
+    """
+    text = SKILLS[fmt]
+    if install:
+        dest = Path.home() / INSTALL_PATHS[fmt]
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            _fail(ctx, "error", f"Could not write skill to {dest}: {exc}", 1)
+        _emit(ctx, {"format": fmt, "path": str(dest)}, lambda d: click.echo(f"Installed {fmt} skill to {d['path']}"))
+        return
+    _emit(ctx, {"format": fmt, "content": text}, lambda _d: click.echo(text, nl=False))
 
 
 def main() -> None:

@@ -75,6 +75,7 @@ self-documenting.
 | `imagen sky-templates` | List sky-replacement template ids |
 | `imagen ai-tools PROJECT` | List AI quick tools available for a project |
 | `imagen config` | Show or set persisted defaults |
+| `imagen skill` | Print or install the agent skill that teaches an AI agent to drive this CLI |
 
 ### Global options
 
@@ -159,6 +160,26 @@ fi
 
 ## For AI agents
 
-An installable skill (`skills/imagen-cli/SKILL.md`) teaches agents to drive this
+The CLI ships an **agent skill** — a `SKILL.md` with `name`/`description`
+frontmatter (`skills/imagen-cli/SKILL.md`) — that teaches an agent to drive this
 CLI: always use `--json`, check exit codes, and discover capabilities via
-`--help` rather than hardcoding commands.
+`--help` rather than hardcoding commands. Claude Code and OpenAI Codex use the
+**same skill format**, so one skill serves both agents.
+
+`imagen skill` makes it self-bootstrapping — no repo checkout needed, since the
+skill text is embedded in the binary:
+
+```bash
+imagen skill                        # print the skill to stdout
+imagen skill --codex                # identical text (flags only pick install dir)
+imagen --json skill                 # {"format": "...", "content": "..."}  (--json is global, goes first)
+
+# Install it where the agent auto-discovers skills by their frontmatter:
+imagen skill --claude --install     # -> ~/.claude/skills/imagen-cli/SKILL.md
+imagen skill --codex  --install     # -> ~/.codex/skills/imagen-cli/SKILL.md
+```
+
+`--claude` / `--codex` only choose the **install location** — the skill content
+is identical. To feed it into an agent that reads instructions from stdin/context
+instead of a skills dir, just pipe the printed output. Install honors `--json` and
+the standard exit codes, so failures are machine-readable too.

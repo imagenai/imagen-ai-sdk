@@ -110,3 +110,7 @@ fix = true
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Embedded agent-guide prose — line length is not meaningful here.
+"imagen_sdk/skill_text.py" = ["E501"]

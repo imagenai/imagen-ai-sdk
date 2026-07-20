@@ -293,3 +293,67 @@ def test_config_value_used_as_fallback(runner):
         result = runner.invoke(cli, ["--json", "profiles"])
     assert result.exit_code == 0
     assert seen["api_key"] == "FROMFILE"
+
+
+# --------------------------------------------------------------------------- #
+# skill command                                                               #
+# --------------------------------------------------------------------------- #
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize("fmt", ["claude", "codex"])
+def test_skill_prints_full_skill_with_frontmatter(runner, fmt):
+    # Both agents use the same SKILL.md format; Codex needs the frontmatter
+    # (name/description) for discovery too, so it must NOT be stripped.
+    result = runner.invoke(cli, ["skill", f"--{fmt}"])
+    assert result.exit_code == 0
+    assert result.output.startswith("---\nname: imagen-cli")
+    assert result.output == cli_mod.SKILLS[fmt]
+
+
+def test_skill_defaults_to_claude(runner):
+    assert runner.invoke(cli, ["skill"]).output == runner.invoke(cli, ["skill", "--claude"]).output
+
+
+def test_skill_json_wraps_content(runner):
+    result = runner.invoke(cli, ["--json", "skill", "--codex"])
+    assert result.exit_code == 0
+    doc = json.loads(result.output)
+    assert doc["format"] == "codex"
+    assert doc["content"] == cli_mod.SKILLS["codex"]
+
+
+@pytest.mark.parametrize(
+    "fmt,rel",
+    [
+        # Literal expected paths, so a wrong INSTALL_PATHS constant is caught here
+        # rather than silently agreeing with itself.
+        ("claude", ".claude/skills/imagen-cli/SKILL.md"),
+        ("codex", ".codex/skills/imagen-cli/SKILL.md"),
+    ],
+)
+def test_skill_install_writes_to_agent_dir(runner, tmp_path, monkeypatch, fmt, rel):
+    monkeypatch.setattr(cli_mod.Path, "home", staticmethod(lambda: tmp_path))
+    result = runner.invoke(cli, ["--json", "skill", f"--{fmt}", "--install"])
+    assert result.exit_code == 0
+    dest = tmp_path / rel
+    assert dest.read_text(encoding="utf-8") == cli_mod.SKILLS[fmt]
+    assert json.loads(result.output)["path"] == str(dest)
+
+
+def test_skill_install_error_honors_json(runner, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_mod.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(cli_mod.Path, "write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    result = runner.invoke(cli, ["--json", "skill", "--install"])
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error"] == "error"
+
+
+def test_repo_skills_match_embedded_source():
+    # The embedded string is the source of truth; the committed skill copies
+    # (Claude + Codex) are generated from it and must not drift.
+    from imagen_sdk.skill_text import REPO_SKILL_FILES
+
+    for rel in REPO_SKILL_FILES:
+        assert (_REPO_ROOT / rel).read_text() == cli_mod.SKILLS["claude"], rel
