@@ -1,9 +1,10 @@
 # `imagen` CLI
 
 A standalone command-line tool for the Imagen AI photo-editing API. It wraps the
-full API surface and is built to be driven by **both humans and AI agents**:
+core editing workflows and is built to be driven by **both humans and AI agents**:
 every command supports `--json`, uses stable exit codes, and never prompts
-interactively.
+interactively. (A few low-level SDK operations aren't exposed as commands — see
+the SDK for those.)
 
 **No Python required** — the CLI ships as a single self-contained binary.
 
@@ -126,7 +127,7 @@ Passing the right type improves AI quality.
   matching profile (RAW profiles can't process JPEGs and vice versa).
 - Only the **top level** of the folder is scanned; subfolders (e.g. a previous
   `edited/` output) are ignored.
-- Supported RAW: `.dng .nef .cr2 .arw .nrw .crw .orf .raw .rw2 .raf .ptx .pef .rwl .srw .cr3 .3fr .fff`
+- Supported RAW: `.dng .nef .cr2 .arw .nrw .crw .orf .raw .rw2 .raf .ptx .pef .rwl .srw .cr3 .3fr .fff .srf .sr2`
 - Supported JPEG: `.jpg .jpeg`. Other formats (HEIC, etc.) are skipped.
 
 ---
@@ -149,10 +150,11 @@ imagen --json profiles | jq '.[0].profile_key'
 ```
 
 ```bash
-if imagen --json edit ./raws --profile 328 > result.json; then
+# Success JSON goes to stdout; error JSON goes to stderr — capture them separately.
+if imagen --json edit ./raws --profile 328 >result.json 2>error.json; then
   jq -r '.downloaded_files[]' result.json
 else
-  jq -r '.message' result.json >&2   # error detail on stderr
+  jq -r '.message' error.json >&2   # error detail is on stderr
 fi
 ```
 
