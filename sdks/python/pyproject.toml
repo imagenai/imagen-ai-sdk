@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imagen-ai-sdk"
-version = "1.1.1"
+version = "1.2.0"
 description = "A robust, Pydantic-powered SDK for the Imagen AI photo editing workflow"
 authors = [{name = "Shahar Polak", email = "shahar@imagen-ai.com"}]
 license = {text = "MIT"}
@@ -110,3 +110,7 @@ fix = true
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Embedded agent-guide prose — line length is not meaningful here.
+"imagen_sdk/skill_text.py" = ["E501"]

@@ -1,4 +1,19 @@
----
+"""Embedded agent skill for the `imagen` CLI.
+
+The standalone binary can't read the repo's `skills/` folder at runtime, so the
+skill text lives here as the single source of truth. `imagen skill` prints or
+installs it, and the committed copies are generated from this constant — a test
+fails if they drift.
+
+Claude Code and Codex use the *same* skill format: a `SKILL.md` with `name` /
+`description` frontmatter, discovered from a per-agent skills dir. They differ
+only in *where* the skill is installed (see INSTALL_PATHS), so there is one skill
+body, not two.
+"""
+
+from __future__ import annotations
+
+SKILL_MD = """---
 name: imagen-cli
 description: "Use whenever an agent or user needs to edit, cull, or process photos with Imagen AI from the command line. Triggers on: 'edit my photos', 'run imagen', 'use the imagen CLI', 'AI edit these RAW/JPEG files', 'batch process wedding/portrait/real-estate photos', 'list my imagen profiles/projects', 'enhance an edited image', 'image-to-image edit'. The `imagen` CLI is a single self-contained binary (no Python required) that wraps the full Imagen AI API. Prefer it over hand-writing SDK code."
 ---
@@ -92,3 +107,23 @@ Only pass the flags you want on — unset flags are left unset, not forced off.
   user sees progress rather than burying it in a subagent.
 - To wire Imagen into a script, `--json` + exit codes are all you need — no SDK
   import required.
+"""
+
+# Same skill content for both agents; the only difference is the install home.
+SKILLS = {"claude": SKILL_MD, "codex": SKILL_MD}
+
+# Where `imagen skill --install` writes each agent's copy (relative to $HOME).
+# Each is that agent's own skills dir, where it auto-discovers SKILL.md by its
+# frontmatter, and a dedicated namespaced subdir so install never clobbers
+# unrelated files. (Codex also reads a cross-agent `~/.agents/skills/`, but we
+# install into its own `~/.codex/skills/` to keep the two agents symmetric.)
+INSTALL_PATHS = {
+    "claude": ".claude/skills/imagen-cli/SKILL.md",
+    "codex": ".codex/skills/imagen-cli/SKILL.md",
+}
+
+# Committed copy (repo-relative), generated from SKILL_MD. One file serves both
+# agents since the format is identical; each agent gets its own installed copy via
+# `imagen skill --claude|--codex --install` (see INSTALL_PATHS). We don't commit a
+# `.agents/skills/` copy because that dir is gitignored in this repo.
+REPO_SKILL_FILES = ("skills/imagen-cli/SKILL.md",)

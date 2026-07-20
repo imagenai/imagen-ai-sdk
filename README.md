@@ -21,6 +21,10 @@ curl -fsSL https://raw.githubusercontent.com/imagenai/imagen-ai-sdk/master/sdks/
 imagen edit ./raws --profile 328 --type wedding --crop
 ```
 
+Driving it from an AI agent (Claude Code or OpenAI Codex)? Run
+`imagen skill --claude --install` or `imagen skill --codex --install` to drop a
+skill into the agent's discovery dir so it learns the full command surface.
+
 ## Repository layout
 
 ```
