@@ -1,68 +1,168 @@
 # Imagen AI SDK
 
-Multi-language SDK monorepo for the [Imagen AI](https://imagen-ai.com) photo-editing API.
+Official SDKs and command-line tools for integrating [Imagen AI](https://imagen-ai.com)
+photo editing into applications, automation workflows, and backend services.
 
-| Language | Location | Install |
-|----------|----------|---------|
-| Python | [`sdks/python/`](sdks/python/) | `pip install imagen-ai-sdk` |
-| Node / TypeScript | [`sdks/node/`](sdks/node/) | `npm install imagen-ai-sdk` |
-| Go | [`sdks/go/`](sdks/go/) | `go get github.com/imagenai/imagen-ai-sdk/sdks/go` |
+Imagen applies your trained editing style — an **AI Profile** — to whole batches of
+photos: upload RAW or JPEG images, apply a profile, monitor the editing job, and
+download Lightroom-compatible **XMP** sidecars or exported JPEGs. Your original
+files are never modified.
 
-See each SDK's own README for full usage and examples.
+[![CI](https://github.com/imagenai/imagen-ai-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/imagenai/imagen-ai-sdk/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/imagen-ai-sdk?label=pypi)](https://pypi.org/project/imagen-ai-sdk/)
+[![npm](https://img.shields.io/npm/v/imagen-ai-sdk?label=npm)](https://www.npmjs.com/package/imagen-ai-sdk)
+[![Go Reference](https://pkg.go.dev/badge/github.com/imagenai/imagen-ai-sdk/sdks/go.svg)](https://pkg.go.dev/github.com/imagenai/imagen-ai-sdk/sdks/go)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
-## Command-line tool
+## Choose your interface
 
-Prefer the terminal (or driving Imagen from an AI agent)? The **`imagen` CLI** is
-a single self-contained binary — no Python required — that wraps the core editing
-workflows with `--json` output and stable exit codes. See [`docs/CLI.md`](docs/CLI.md).
+| Interface | Install | Best for |
+|-----------|---------|----------|
+| [Python](sdks/python/README.md) | `pip install imagen-ai-sdk` | Scripts, automation, and Python services |
+| [Node.js / TypeScript](sdks/node/README.md) | `npm install imagen-ai-sdk` | JavaScript and TypeScript applications |
+| [Go](sdks/go/README.md) | `go get github.com/imagenai/imagen-ai-sdk/sdks/go` | Compiled backend services |
+| [CLI](docs/CLI.md) | [install script](docs/CLI.md#install) | Shell scripts, CI, and agent workflows |
+
+All four target the same API and the shared [workflow contract](docs/WORKFLOWS.md).
+
+## Prerequisites
+
+- An **Imagen account with API access.** Sign up at [imagen-ai.com](https://imagen-ai.com),
+  then request an API key via [support.imagen-ai.com](https://support.imagen-ai.com/hc).
+- An **API key**, supplied to the SDK/CLI via the `IMAGEN_API_KEY` environment
+  variable (the SDKs also accept it directly in code).
+- A supported runtime for your chosen interface:
+
+  | Interface | Runtime |
+  |-----------|---------|
+  | Python | Python ≥ 3.7 |
+  | Node.js / TypeScript | Node.js ≥ 18 |
+  | Go | Go ≥ 1.22 |
+  | CLI | none — self-contained binary |
+
+- **Input files:** RAW (`.dng`, `.nef`, `.cr2`, `.arw`, …) or JPEG (`.jpg`,
+  `.jpeg`). A single project must be **all RAW or all JPEG — never mixed**, and the
+  profile must match the file type.
+
+### Authentication
+
+```bash
+export IMAGEN_API_KEY="your-api-key"
+```
+
+## Quick start
+
+The smallest end-to-end run in Python — `quick_edit` creates a project, uploads,
+edits, and downloads in one call:
+
+```python
+import asyncio
+from imagen_sdk import quick_edit, EditOptions
+
+async def main():
+    result = await quick_edit(
+        api_key="your-api-key",
+        profile_key=5700,                       # your AI Profile, from the Imagen app
+        image_paths=["photo1.nef", "photo2.dng"],
+        edit_options=EditOptions(crop=True, straighten=True),
+        download=True,                          # add export=True to also render JPEGs
+    )
+    print(f"Done — {len(result.downloaded_files)} edited photos")
+
+asyncio.run(main())
+```
+
+For step-by-step control (progress callbacks, manual create/upload/edit/download)
+and the Node, Go, and CLI equivalents, see each interface's guide under
+[Documentation](#documentation).
+
+## How it works
+
+```text
+Create project
+      ↓
+Upload photos        (RAW or JPEG — one type per project)
+      ↓
+Start AI editing     (apply an AI Profile)
+      ↓
+Wait for completion
+      ↓
+Download XMP sidecars   — or export to JPEG
+```
+
+- **Editing produces XMP sidecars** — Lightroom/Photoshop-compatible edit
+  instructions. Your original images are never modified.
+- **Export is optional** — render the edited images to delivery-ready JPEGs.
+- **Image-to-Image (I2I)** projects are a separate family with their own upload
+  and completion model (no status polling — results arrive via callback or by
+  polling for download links).
+
+Full behavioral details are in the [workflow guide](docs/WORKFLOWS.md).
+
+## Common workflows
+
+Each is documented language-neutrally in [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md):
+
+- **Standard AI editing (Workflow A)** — apply a profile, download XMP sidecars.
+- **Export to JPEG (Workflow B)** — render edited images to final JPEGs.
+- **AI Enhancement & Copilot (Workflow C)** — per-image quick tools and
+  natural-language edits, then finalize (upscaled deliverables).
+- **Image-to-Image / I2I (Workflow D)** — a distinct project family with its own
+  upload routing and completion flow.
+- **Project management (Workflow E)** — list, fetch, and paginate projects.
+
+## Command-line interface
+
+Reach for the `imagen` CLI when you want photo editing from a **shell, a CI
+pipeline, or an AI agent** rather than embedding an SDK. It needs no runtime
+(self-contained binary), supports `--json` on every command, and uses stable exit
+codes (`0` success, `2` auth/config, `1` other error).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/imagenai/imagen-ai-sdk/master/sdks/python/packaging/install.sh | sh
-imagen edit ./raws --profile 328 --type wedding --crop
+imagen edit ./raws --profile 5700 --type wedding --crop
 ```
 
-Driving it from an AI agent (Claude Code or OpenAI Codex)? Run
-`imagen skill --claude --install` or `imagen skill --codex --install` to drop a
-skill into the agent's discovery dir so it learns the full command surface.
+Full reference: [`docs/CLI.md`](docs/CLI.md). AI agents can self-install the CLI
+skill with `imagen skill --claude --install` or `imagen skill --codex --install`
+(see [`skills/imagen-cli/SKILL.md`](skills/imagen-cli/SKILL.md)).
 
-## Repository layout
+## Documentation
 
+- [Python SDK guide](sdks/python/README.md)
+- [Node.js / TypeScript SDK guide](sdks/node/README.md)
+- [Go SDK guide](sdks/go/README.md)
+- [CLI guide](docs/CLI.md)
+- [Workflow guide](docs/WORKFLOWS.md) — the language-neutral behavioral contract
+- [OpenAPI specification](spec/openapi.yaml)
+- [Contributing with a coding agent](AGENTS.md) · [Releasing](docs/RELEASING.md)
+
+## Repository structure
+
+```text
+sdks/python/   Python SDK (PyPI) — also builds the `imagen` CLI
+sdks/node/     Node / TypeScript SDK (npm)
+sdks/go/       Go SDK (go get; no central registry)
+docs/          WORKFLOWS.md, CLI.md, RELEASING.md
+spec/          OpenAPI contract (openapi.yaml)
 ```
-sdks/python/     Python SDK (published to PyPI)
-sdks/node/       Node / TypeScript SDK (published to npm)
-sdks/go/         Go SDK (consumed directly via `go get`; no central registry)
-docs/            Shared docs — incl. WORKFLOWS.md, the language-neutral
-                 behavioral contract every SDK implements
-spec/            Reference OpenAPI 3.1 contract (spec/openapi.yaml)
-```
 
-Each SDK is self-contained with its own version and bundled `LICENSE`. Python and
-Node publish to their registries (PyPI, npm); Go has no central registry, so it is
-imported straight from this repo — `go get github.com/imagenai/imagen-ai-sdk/sdks/go`,
-with releases cut as `sdks/go/vX.Y.Z` tags.
+Each SDK versions and **releases independently** (Python and Node to their
+registries, Go via a `sdks/go/vX.Y.Z` tag). They target the same API and shared
+[workflow contract](docs/WORKFLOWS.md), so newer capabilities may land in one
+language before another — check each SDK's own README for its current feature set.
+Release mechanics are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
-The workflows every SDK implements (create → upload → edit → poll → download,
-plus export, AI enhancement, and image-to-image) are defined language-neutrally in
-[`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
+## Support and contributing
 
-## For AI agents
-
-- **Using Imagen from an agent?** The `imagen` CLI is agent-native (`--json`,
-  stable exit codes, self-describing via `--help`). Install the skill so your
-  agent discovers it: `imagen skill --claude --install` or
-  `imagen skill --codex --install`. Details in [`docs/CLI.md`](docs/CLI.md); the
-  skill itself is [`skills/imagen-cli/SKILL.md`](skills/imagen-cli/SKILL.md).
-- **Contributing to this repo with a coding agent?** Read
-  [`AGENTS.md`](AGENTS.md) — build/test/lint commands, the CLI design contract,
-  versioning, and the never-push-to-master rule.
-
-## Releasing
-
-Each SDK releases independently on a prefixed git tag (`python-v*`, `cli-v*`,
-`node-v*`); merging to `master` never publishes. See
-[`docs/RELEASING.md`](docs/RELEASING.md) for the full process, including PyPI
-Trusted-Publishing setup.
+- **Bugs and feature requests:** open a
+  [GitHub issue](https://github.com/imagenai/imagen-ai-sdk/issues).
+- **Account, API, or billing help:** [support.imagen-ai.com](https://support.imagen-ai.com/hc).
+- **Contributing:** [`AGENTS.md`](AGENTS.md) documents the build/test/lint
+  commands, the CLI design contract, versioning, and the branch/PR rules; release
+  steps are in [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Each published package also bundles its own copy.
+MIT — see [LICENSE](LICENSE). Also declared in each SDK's package metadata
+(`sdks/python/pyproject.toml`, `sdks/node/package.json`).
