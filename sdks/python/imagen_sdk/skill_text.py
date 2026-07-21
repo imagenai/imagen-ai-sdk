@@ -15,15 +15,17 @@ from __future__ import annotations
 
 SKILL_MD = """---
 name: imagen-cli
-description: "Use whenever an agent or user needs to edit, cull, or process photos with Imagen AI from the command line. Triggers on: 'edit my photos', 'run imagen', 'use the imagen CLI', 'AI edit these RAW/JPEG files', 'batch process wedding/portrait/real-estate photos', 'list my imagen profiles/projects', 'enhance an edited image', 'image-to-image edit'. The `imagen` CLI is a single self-contained binary (no Python required) that wraps the full Imagen AI API. Prefer it over hand-writing SDK code."
+description: "Use whenever an agent or user needs to edit, cull, or process photos with Imagen AI from the command line. Triggers on: 'edit my photos', 'run imagen', 'use the imagen CLI', 'AI edit these RAW/JPEG files', 'batch process wedding/portrait/real-estate photos', 'list my imagen profiles/projects', 'enhance an edited image', 'image-to-image edit'. The `imagen` CLI is a single self-contained binary (no Python required) that wraps the core Imagen AI editing workflows. Prefer it over hand-writing SDK code."
 ---
 
 # Imagen CLI (agent-native)
 
-`imagen` is a standalone binary wrapping the whole Imagen AI API. It is built to
-be driven by agents: non-interactive, `--json` output, stable exit codes, and
-fully self-describing via `--help`. **You do not need to memorize the command
-surface — discover it at runtime.**
+`imagen` is a standalone binary wrapping the core Imagen AI editing workflows. It
+is built to be driven by agents: non-interactive, `--json` output, stable exit
+codes, and fully self-describing via `--help`. **You do not need to memorize the
+command surface — discover it at runtime.** (A few low-level SDK operations aren't
+exposed as commands — if `imagen <cmd> --help` doesn't list what you need, use the
+SDK directly.)
 
 ## First: make sure it's installed
 
@@ -93,7 +95,7 @@ Only pass the flags you want on — unset flags are left unset, not forced off.
   with a matching profile (RAW profiles can't process JPEGs and vice versa).
 - The folder scan is **top-level only** — subdirectories (e.g. a previous
   `edited/` output) are ignored.
-- Supported RAW: `.dng .nef .cr2 .arw .nrw .crw .orf .raw .rw2 .raf .ptx .pef .rwl .srw .cr3 .3fr .fff`
+- Supported RAW: `.dng .nef .cr2 .arw .nrw .crw .orf .raw .rw2 .raf .ptx .pef .rwl .srw .cr3 .3fr .fff .srf .sr2`
 - Supported JPEG: `.jpg .jpeg`. Other formats (HEIC, etc.) are silently skipped.
 
 ## Photography types (`--type`)

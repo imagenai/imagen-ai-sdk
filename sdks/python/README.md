@@ -5,8 +5,8 @@
 Transform your post-production workflow with AI-powered batch editing. Upload hundreds of photos, apply professional edits automatically, and get download links in minutes.
 
 > **Prefer the command line?** This package also ships the `imagen` CLI — a
-> standalone binary (no Python required) that wraps the full API with `--json`
-> output for scripts and AI agents. See [`../../docs/CLI.md`](../../docs/CLI.md).
+> standalone binary (no Python required) that wraps the core editing workflows
+> with `--json` output for scripts and AI agents. See [`../../docs/CLI.md`](../../docs/CLI.md).
 
 ---
 

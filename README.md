@@ -13,8 +13,8 @@ See each SDK's own README for full usage and examples.
 ## Command-line tool
 
 Prefer the terminal (or driving Imagen from an AI agent)? The **`imagen` CLI** is
-a single self-contained binary — no Python required — that wraps the full API
-with `--json` output and stable exit codes. See [`docs/CLI.md`](docs/CLI.md).
+a single self-contained binary — no Python required — that wraps the core editing
+workflows with `--json` output and stable exit codes. See [`docs/CLI.md`](docs/CLI.md).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/imagenai/imagen-ai-sdk/master/sdks/python/packaging/install.sh | sh
@@ -44,6 +44,24 @@ with releases cut as `sdks/go/vX.Y.Z` tags.
 The workflows every SDK implements (create → upload → edit → poll → download,
 plus export, AI enhancement, and image-to-image) are defined language-neutrally in
 [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
+
+## For AI agents
+
+- **Using Imagen from an agent?** The `imagen` CLI is agent-native (`--json`,
+  stable exit codes, self-describing via `--help`). Install the skill so your
+  agent discovers it: `imagen skill --claude --install` or
+  `imagen skill --codex --install`. Details in [`docs/CLI.md`](docs/CLI.md); the
+  skill itself is [`skills/imagen-cli/SKILL.md`](skills/imagen-cli/SKILL.md).
+- **Contributing to this repo with a coding agent?** Read
+  [`AGENTS.md`](AGENTS.md) — build/test/lint commands, the CLI design contract,
+  versioning, and the never-push-to-master rule.
+
+## Releasing
+
+Each SDK releases independently on a prefixed git tag (`python-v*`, `cli-v*`,
+`node-v*`); merging to `master` never publishes. See
+[`docs/RELEASING.md`](docs/RELEASING.md) for the full process, including PyPI
+Trusted-Publishing setup.
 
 ## License
 
