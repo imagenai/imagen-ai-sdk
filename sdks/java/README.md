@@ -11,7 +11,7 @@ Python, Node and Go SDKs: same endpoints, same workflow, same file-type rules.
 
 ```xml
 <dependency>
-  <groupId>ai.imagen</groupId>
+  <groupId>com.imagen-ai</groupId>
   <artifactId>imagen-ai-sdk</artifactId>
   <version>1.2.0</version>
 </dependency>
@@ -20,7 +20,7 @@ Python, Node and Go SDKs: same endpoints, same workflow, same file-type rules.
 ## Quick start
 
 ```java
-import ai.imagen.*;
+import com.imagenai.*;
 import java.util.List;
 
 ImagenClient client = ImagenClient.builder("YOUR_API_KEY").build();

@@ -1,16 +1,19 @@
 name: Release Java SDK
 
-# Builds the Java SDK jar and attaches it to a GitHub release. Two gates before
-# anything is published:
+# Publishes sdks/java to Maven Central via the Central Portal. Two gates before
+# anything is uploaded:
 #   1. Only runs on a deliberate `java-v*` tag (or manual dispatch) — never on a
 #      push/merge to a branch, so merging to master never publishes.
-#   2. The `release` job `needs: test`, so a failing test suite blocks the upload.
+#   2. The `publish` job `needs: test`, so a failing test suite blocks the upload.
 #
-# This publishes the jar as a GitHub release asset (like the CLI binaries).
-# Publishing to Maven Central is a deliberate follow-up: it requires an OSSRH /
-# Sonatype account, a GPG signing key, and `distributionManagement` + the
-# gpg/nexus-staging plugins in pom.xml. Left out on purpose rather than shipped
-# half-wired against secrets that don't exist yet.
+# Required GitHub secrets (Settings > Secrets and variables > Actions):
+#   CENTRAL_TOKEN_USER  - Central Portal user token (username half)
+#   CENTRAL_TOKEN_PASS  - Central Portal user token (password half)
+#   GPG_PRIVATE_KEY     - ASCII-armored private signing key (full block)
+#   GPG_PASSPHRASE      - passphrase for that key
+# Until these exist the publish step fails closed (nothing is released).
+# NOTE: Maven Central releases are PERMANENT — a version cannot be deleted or
+# overwritten. Bump the pom version for every release.
 
 on:
   push:
@@ -34,13 +37,11 @@ jobs:
           cache: maven
       - run: mvn -B test
 
-  release:
+  publish:
     needs: test
-    # Only publish a release for an actual java-v* tag. A manual workflow_dispatch
-    # run still builds the jar (for testing) but does not create a release.
+    # A manual workflow_dispatch run still runs tests, but only a real java-v* tag publishes.
+    if: startsWith(github.ref, 'refs/tags/java-v')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -48,21 +49,26 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
+          # Writes ~/.m2/settings.xml with a `central` server whose credentials
+          # are read from these env vars at deploy time, and imports the GPG key.
+          server-id: central
+          server-username: CENTRAL_TOKEN_USER
+          server-password: CENTRAL_TOKEN_PASS
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-      # On a tag release, the tag must match the pom version, or we'd ship a jar
-      # whose version doesn't match what was tagged.
+      # The tag must match the pom version, or we'd ship a version that doesn't
+      # match what was tagged.
       - name: Verify tag matches pom version
-        if: startsWith(github.ref, 'refs/tags/java-v')
         run: |
           tag="${GITHUB_REF_NAME#java-v}"
           pom=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
           echo "tag version: $tag | pom version: $pom"
           [ "$tag" = "$pom" ] || { echo "::error::tag ($tag) does not match pom version ($pom)"; exit 1; }
 
-      - run: mvn -B -DskipTests package
-
-      - name: Attach jar to release
-        if: startsWith(github.ref, 'refs/tags/java-v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: sdks/java/target/imagen-ai-sdk-*.jar
+      - name: Publish to Maven Central
+        run: mvn -B -Prelease -DskipTests deploy
+        env:
+          CENTRAL_TOKEN_USER: ${{ secrets.CENTRAL_TOKEN_USER }}
+          CENTRAL_TOKEN_PASS: ${{ secrets.CENTRAL_TOKEN_PASS }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
