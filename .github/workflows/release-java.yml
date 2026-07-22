@@ -1,0 +1,68 @@
+name: Release Java SDK
+
+# Builds the Java SDK jar and attaches it to a GitHub release. Two gates before
+# anything is published:
+#   1. Only runs on a deliberate `java-v*` tag (or manual dispatch) — never on a
+#      push/merge to a branch, so merging to master never publishes.
+#   2. The `release` job `needs: test`, so a failing test suite blocks the upload.
+#
+# This publishes the jar as a GitHub release asset (like the CLI binaries).
+# Publishing to Maven Central is a deliberate follow-up: it requires an OSSRH /
+# Sonatype account, a GPG signing key, and `distributionManagement` + the
+# gpg/nexus-staging plugins in pom.xml. Left out on purpose rather than shipped
+# half-wired against secrets that don't exist yet.
+
+on:
+  push:
+    tags:
+      - "java-v*"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: sdks/java
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn -B test
+
+  release:
+    needs: test
+    # Only publish a release for an actual java-v* tag. A manual workflow_dispatch
+    # run still builds the jar (for testing) but does not create a release.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # On a tag release, the tag must match the pom version, or we'd ship a jar
+      # whose version doesn't match what was tagged.
+      - name: Verify tag matches pom version
+        if: startsWith(github.ref, 'refs/tags/java-v')
+        run: |
+          tag="${GITHUB_REF_NAME#java-v}"
+          pom=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
+          echo "tag version: $tag | pom version: $pom"
+          [ "$tag" = "$pom" ] || { echo "::error::tag ($tag) does not match pom version ($pom)"; exit 1; }
+
+      - run: mvn -B -DskipTests package
+
+      - name: Attach jar to release
+        if: startsWith(github.ref, 'refs/tags/java-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sdks/java/target/imagen-ai-sdk-*.jar
