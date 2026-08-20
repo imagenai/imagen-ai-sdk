@@ -5,6 +5,14 @@ built from it) are documented here. This project follows
 [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [1.2.2] - 2026-08-20
+
+### Fixed
+
+- `imagen_sdk.__version__` (and therefore `imagen --version`) now matches the
+  package version; 1.2.1 shipped still reporting 1.2.0 at runtime. Added a test
+  that keeps `pyproject.toml` and `__version__` in sync.
+
 ## [1.2.1] - 2026-08-20
 
 ### Changed

@@ -316,10 +316,15 @@ When adding features, update the main README.md:
 ## 🚀 Release Process
 
 ### **Version Bumping**
-Update version in `pyproject.toml`:
+Update the version in **both** places (a test enforces they match):
 ```toml
+# pyproject.toml
 [project]
-version = "1.2.0"  # Semantic versioning
+version = "X.Y.Z"  # Semantic versioning
+```
+```python
+# imagen_sdk/__init__.py
+__version__ = "X.Y.Z"
 ```
 
 ### **Changelog**
