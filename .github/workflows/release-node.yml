@@ -6,14 +6,17 @@ name: Release Node SDK
 #   2. The `publish` job `needs: test`, so a failing test suite blocks the upload.
 #
 # Auth: npm automation token in secret NPM_TOKEN. Until that secret is configured
-# the publish step fails closed (nothing is released). Do a `npm publish
-# --dry-run` first to confirm the tarball contents.
+# the publish step fails closed (nothing is released). Upgrade path: switch to
+# npm trusted publishing (OIDC) + --provenance and drop the stored token.
+#
+# No workflow_dispatch: a manual dispatch would publish the selected branch's
+# package.json version while skipping the tag-vs-version gate below. Releases
+# always start with a node-v* tag.
 
 on:
   push:
     tags:
       - "node-v*"
-  workflow_dispatch:
 
 permissions:
   contents: read
