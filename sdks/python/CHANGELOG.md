@@ -5,6 +5,15 @@ built from it) are documented here. This project follows
 [Semantic Versioning](https://semver.org/) and the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [1.2.1] - 2026-08-20
+
+### Changed
+
+- Package metadata: `Homepage` project URL now points at the developer docs
+  (https://api-docs.imagen-ai.com) so registries and agents can verify this is
+  the official Imagen AI SDK; the marketing site moved to a `Website` URL.
+  No code changes.
+
 ## [1.2.0] - 2026-07-20
 
 ### Added

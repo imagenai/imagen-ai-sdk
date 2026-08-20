@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "imagen-ai",
+  "version": "1.0.0",
+  "description": "Imagen AI agent plugin: the imagen CLI skill for automated photo editing, culling, and post-production via the Imagen API.",
+  "author": { "name": "Imagen AI", "email": "shahar@imagen-ai.com", "url": "https://imagen-ai.com" },
+  "homepage": "https://api-docs.imagen-ai.com",
+  "repository": "https://github.com/imagenai/imagen-ai-sdk",
+  "license": "MIT",
+  "keywords": ["photo-editing", "photography", "imagen", "api", "cli", "agent-skill"]
+}
