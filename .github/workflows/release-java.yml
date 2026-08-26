@@ -1,0 +1,74 @@
+name: Release Java SDK
+
+# Publishes sdks/java to Maven Central via the Central Portal. Two gates before
+# anything is uploaded:
+#   1. Only runs on a deliberate `java-v*` tag (or manual dispatch) — never on a
+#      push/merge to a branch, so merging to master never publishes.
+#   2. The `publish` job `needs: test`, so a failing test suite blocks the upload.
+#
+# Required GitHub secrets (Settings > Secrets and variables > Actions):
+#   CENTRAL_TOKEN_USER  - Central Portal user token (username half)
+#   CENTRAL_TOKEN_PASS  - Central Portal user token (password half)
+#   GPG_PRIVATE_KEY     - ASCII-armored private signing key (full block)
+#   GPG_PASSPHRASE      - passphrase for that key
+# Until these exist the publish step fails closed (nothing is released).
+# NOTE: Maven Central releases are PERMANENT — a version cannot be deleted or
+# overwritten. Bump the pom version for every release.
+
+on:
+  push:
+    tags:
+      - "java-v*"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: sdks/java
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn -B test
+
+  publish:
+    needs: test
+    # A manual workflow_dispatch run still runs tests, but only a real java-v* tag publishes.
+    if: startsWith(github.ref, 'refs/tags/java-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          # Writes ~/.m2/settings.xml with a `central` server whose credentials
+          # are read from these env vars at deploy time, and imports the GPG key.
+          server-id: central
+          server-username: CENTRAL_TOKEN_USER
+          server-password: CENTRAL_TOKEN_PASS
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      # The tag must match the pom version, or we'd ship a version that doesn't
+      # match what was tagged.
+      - name: Verify tag matches pom version
+        run: |
+          tag="${GITHUB_REF_NAME#java-v}"
+          pom=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
+          echo "tag version: $tag | pom version: $pom"
+          [ "$tag" = "$pom" ] || { echo "::error::tag ($tag) does not match pom version ($pom)"; exit 1; }
+
+      - name: Publish to Maven Central
+        run: mvn -B -Prelease -DskipTests deploy
+        env:
+          CENTRAL_TOKEN_USER: ${{ secrets.CENTRAL_TOKEN_USER }}
+          CENTRAL_TOKEN_PASS: ${{ secrets.CENTRAL_TOKEN_PASS }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
