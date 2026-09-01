@@ -198,7 +198,7 @@ class ImagenClient:
             self._session = httpx.AsyncClient(
                 headers={
                     "x-api-key": self.api_key,
-                    "User-Agent": "Imagen-Python-SDK/1.0.2.dev0",
+                    "User-Agent": "Imagen-Python-SDK/1.0.2",
                 },
                 timeout=httpx.Timeout(300.0),
             )

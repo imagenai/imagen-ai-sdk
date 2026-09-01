@@ -98,7 +98,7 @@ from .models import (
 )
 
 # Version info
-__version__ = "1.0.2.dev0"
+__version__ = "1.0.2"
 __author__ = "Shahar Polak"
 __email__ = "shahar@imagen-ai.com"
 __description__ = "A robust, Pydantic-powered SDK for the Imagen AI photo editing workflow"
