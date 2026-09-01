@@ -4,11 +4,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from imagen_sdk import UploadSummary, quick_edit
+from imagen_sdk import ImagenClient, UploadSummary, quick_edit
 
 
-def _mock_client():
-    client = AsyncMock()
+def _mock_client() -> AsyncMock:
+    client = AsyncMock(spec=ImagenClient)
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
     client.create_project.return_value = "uuid-1"
@@ -18,7 +18,7 @@ def _mock_client():
 
 
 @pytest.mark.asyncio
-async def test_quick_edit_skip_profile_validation_bypasses_profile_fetch():
+async def test_quick_edit_skip_profile_validation_bypasses_profile_fetch() -> None:
     """With skip_profile_validation=True, quick_edit never fetches profiles and still edits."""
     with (
         patch("imagen_sdk.imagen_sdk.ImagenClient") as client_class,
