@@ -1145,6 +1145,7 @@ async def quick_edit(
     base_url: str = "https://api-beta.imagen-ai.com/v1",
     logger: logging.Logger | None = None,
     logger_level: int | None = None,
+    skip_profile_validation: bool = False,
 ) -> QuickEditResult:
     """
     Complete one-line workflow: create project, upload, edit, and optionally export and download.
@@ -1171,6 +1172,9 @@ async def quick_edit(
         base_url (str): API base URL (default: production URL)
         logger (Optional[logging.Logger]): Optional custom logger for workflow logging
         logger_level (Optional[int]): Optional logging level
+        skip_profile_validation (bool): Skip client-side profile ownership / file-type
+                                        validation. Only works for internal accounts
+                                        allow-listed on the server (default: False).
 
     Returns:
         QuickEditResult: Complete result object containing:
@@ -1217,11 +1221,16 @@ async def quick_edit(
 
     async with ImagenClient(api_key, base_url, logger=logger, logger_level=logger_level) as client:
         # --- Profile and file type validation ---
-        profile = await get_profile(api_key, profile_key, base_url)
-        _logger.info(f"Using profile: {profile.profile_name} (type: {profile.image_type})")
+        if skip_profile_validation:
+            # ponytail: internal users on the server-side skip-list send profile_key as-is;
+            # api-gateway skips validate_profile for them, so the SDK must not block first.
+            _logger.info(f"Skipping profile validation, using profile_key {profile_key} as-is")
+        else:
+            profile = await get_profile(api_key, profile_key, base_url)
+            _logger.info(f"Using profile: {profile.profile_name} (type: {profile.image_type})")
 
-        # Use the helper for file type validation
-        check_files_match_profile_type(image_paths, profile, _logger)
+            # Use the helper for file type validation
+            check_files_match_profile_type(image_paths, profile, _logger)
 
         # --- Continue with workflow ---
         project_uuid = await client.create_project(project_name)
